@@ -2,7 +2,7 @@
   "data": {
     "dataset_root": "../datasets/SpA-MMD/processed",
     "train_split": "../splits/train_subjects.txt",
-    "val_split": "../splits/val_subjects.txt",
+    "val_split": null,
     "test_split": "../splits/test_subjects.txt",
     "session": "walk",
     "rgb_dir": "rgb",
@@ -19,6 +19,7 @@
     "normalize_skeleton": true
   },
   "model": {
+    "input_mode": "fusion",
     "embed_dim": 256,
     "rgb_patch_size": 16,
     "rgb_spatial_depth": 2,
@@ -48,5 +49,13 @@
     "log_interval": 10,
     "amp": true,
     "seed": 42
+  },
+  "cv": {
+    "enabled": true,
+    "num_folds": 2,
+    "seed": 42,
+    "selection_metric": "loss",
+    "use_mean_best_epoch": true,
+    "final_epochs": null
   }
 }

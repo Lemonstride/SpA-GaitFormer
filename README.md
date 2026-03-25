@@ -8,8 +8,24 @@ Transformer-based dual-modal training pipeline for SpA-MMD, targeting:
 
 This project was authored on macOS, but the implementation relies on Python, PyTorch, and `pathlib`, so it is intended to run on both Windows and Linux.
 
+## English
 
-## Data Assumptions
+### Recommended Small-Sample Workflow
+
+This repository is now designed for small medical datasets with subject-level splits:
+
+1. Keep a fixed test set.
+2. Use the training pool for `2-fold` cross-validation.
+3. Select a final epoch from cross-validation.
+4. Retrain on the full training pool.
+5. Evaluate once on the fixed test set.
+
+The default split files already follow this design:
+
+- Training pool: 20 subjects
+- Fixed test set: 6 subjects
+
+### Data Assumptions
 
 The current implementation directly targets the SpA-MMD `processed/subject/session` structure and uses the gait task by default:
 
@@ -33,53 +49,36 @@ Default inputs:
 - Binary label: `walk/labels/binary_label.txt`
 - Severity label: `walk/labels/severity_label.txt`
 
-If your skeleton source is not `kpt3d.npy`, update `data.skeleton_file` and `joint_dim` in the config.
+### Modalities
 
-## Project Structure
+Set `model.input_mode` in [configs/spa_mmd_dual_stream.json](/Users/ice/Documents/SpA-GaitFormer/configs/spa_mmd_dual_stream.json) to:
 
-- [main.py](/Users/ice/Documents/SpA-GaitFormer/main.py): train/evaluate entry point
-- [spa_gaitformer/data.py](/Users/ice/Documents/SpA-GaitFormer/spa_gaitformer/data.py): SpA-MMD scanning, label loading, dual-modal input pipeline
-- [spa_gaitformer/model.py](/Users/ice/Documents/SpA-GaitFormer/spa_gaitformer/model.py): RGB, skeleton, and fusion Transformers
+- `fusion`
+- `rgb`
+- `skeleton`
+
+This lets you run three baselines under the same subject split.
+
+### Project Structure
+
+- [main.py](/Users/ice/Documents/SpA-GaitFormer/main.py): entry point
+- [spa_gaitformer/data.py](/Users/ice/Documents/SpA-GaitFormer/spa_gaitformer/data.py): subject split loading, fold generation, RGB/skeleton loading
+- [spa_gaitformer/model.py](/Users/ice/Documents/SpA-GaitFormer/spa_gaitformer/model.py): dual-stream Transformer with modality ablation
 - [spa_gaitformer/losses.py](/Users/ice/Documents/SpA-GaitFormer/spa_gaitformer/losses.py): multitask loss
-- [spa_gaitformer/metrics.py](/Users/ice/Documents/SpA-GaitFormer/spa_gaitformer/metrics.py): classification and severity metrics
-- [spa_gaitformer/train.py](/Users/ice/Documents/SpA-GaitFormer/spa_gaitformer/train.py): training, validation, checkpoints
-- [configs/spa_mmd_dual_stream.json](/Users/ice/Documents/SpA-GaitFormer/configs/spa_mmd_dual_stream.json): config template
-- [splits/train_subjects.txt](/Users/ice/Documents/SpA-GaitFormer/splits/train_subjects.txt): training subject list example
-- [splits/val_subjects.txt](/Users/ice/Documents/SpA-GaitFormer/splits/val_subjects.txt): validation subject list example
-- [splits/test_subjects.txt](/Users/ice/Documents/SpA-GaitFormer/splits/test_subjects.txt): test subject list example
+- [spa_gaitformer/metrics.py](/Users/ice/Documents/SpA-GaitFormer/spa_gaitformer/metrics.py): binary metrics and severity metrics
+- [spa_gaitformer/train.py](/Users/ice/Documents/SpA-GaitFormer/spa_gaitformer/train.py): cross-validation, final training, and evaluation
 
-## Split File Format
+### Configuration
 
-Each split file contains one subject per line. By default, the loader appends `walk` automatically:
+Important fields:
 
-```text
-S01
-S02
-S03
-```
+- `data.train_split`: subject pool used for cross-validation and final training
+- `data.test_split`: held-out test subjects
+- `model.input_mode`: `fusion`, `rgb`, or `skeleton`
+- `cv.num_folds`: default `2`
+- `cv.selection_metric`: default `loss`
 
-You can also specify the session explicitly:
-
-```text
-S01/walk
-S02/walk
-```
-
-## Configuration
-
-All paths in the config are resolved relative to the config file location, so the same file can be adapted on Windows or Linux with either absolute or relative paths.
-
-Key fields:
-
-- `data.dataset_root`: root `processed` directory
-- `data.train_split` / `val_split` / `test_split`: subject lists
-- `data.session`: default `walk`
-- `data.skeleton_file`: default `skeleton/kpt3d/kpt3d.npy`
-- `data.max_joints`: number of joints
-- `data.joint_dim`: use `3` for `kpt3d`, `2` for `kpt2d`
-- `task.severity_mode`: `classification` or `regression`
-
-## Installation
+### Installation
 
 Windows:
 
@@ -93,58 +92,72 @@ Linux:
 python -m pip install -r requirements.txt
 ```
 
-If your Linux environment only provides `python3`, replace `python` with `python3`.
+### Commands
 
-## Training
-
-Windows:
-
-```powershell
-python main.py --config configs/spa_mmd_dual_stream.json --mode train
-```
-
-Linux:
+Run `2-fold` cross-validation:
 
 ```bash
-python main.py --config configs/spa_mmd_dual_stream.json --mode train
+python main.py --config configs/spa_mmd_dual_stream.json --mode cross_validate
 ```
 
-## Evaluation
+Train the final model on the full training pool:
 
 ```bash
-python main.py --config configs/spa_mmd_dual_stream.json --mode evaluate --split val
+python main.py --config configs/spa_mmd_dual_stream.json --mode train_final
 ```
 
-Specify a checkpoint:
+Evaluate on the fixed test set:
 
 ```bash
-python main.py --config configs/spa_mmd_dual_stream.json --mode evaluate --split test --checkpoint checkpoints/spa_mmd_dual_stream/best.pt
+python main.py --config configs/spa_mmd_dual_stream.json --mode evaluate --split test
 ```
 
-## Manifest Export
+### Outputs
 
-If you want to export a split to CSV on the offline training machine for inspection, use:
+Cross-validation outputs are written under:
 
-```bash
-python scripts/export_spa_mmd_manifest.py --dataset-root /path/to/processed --split-file splits/train_subjects.txt --output manifests/train.csv
+```text
+checkpoints/spa_mmd_dual_stream/cv/
 ```
 
-## Current Model
+Final training outputs are written under:
 
-The current baseline is a three-stage Transformer:
+```text
+checkpoints/spa_mmd_dual_stream/final/
+```
 
-1. RGB branch: per-frame patch embedding followed by spatial and temporal Transformers.
-2. Skeleton branch: per-frame joint projection followed by joint-level and temporal Transformers.
-3. Fusion branch: concatenates both temporal token streams and uses the fusion Transformer `CLS` token for disease classification and severity prediction.
+### Suggested Reporting
 
-### Notes Before Offline Training
+For binary disease recognition:
 
-- Confirm whether `kpt3d.npy` is shaped as `[T, J, 3]`; if not, the loader should be adjusted accordingly.
-- Confirm whether `severity_label.txt` is categorical or continuous; if it is ordinal, an ordinal loss is preferable.
-- Train/val/test must be split by subject rather than by session to avoid identity leakage.
+- accuracy
+- precision
+- recall
+- F1
 
+For severity prediction:
 
-## 数据假设
+- severity accuracy
+- severity macro-F1
+
+## 中文
+
+### 推荐的小样本流程
+
+当前仓库已经改成适合小样本医学数据的受试者级实验流程：
+
+1. 固定测试集
+2. 在训练池内部做 `2-fold` 交叉验证
+3. 根据交叉验证选择最终训练轮数
+4. 用全部训练池重训最终模型
+5. 只在固定测试集上评估一次
+
+默认 split 已经按这个思路写好：
+
+- 训练池：20 人
+- 固定测试集：6 人
+
+### 数据假设
 
 当前实现直接适配 SpA-MMD 的 `processed/subject/session` 结构，默认使用 gait 任务：
 
@@ -168,53 +181,36 @@ SpA-MMD/
 - 二分类标签：`walk/labels/binary_label.txt`
 - 严重程度标签：`walk/labels/severity_label.txt`
 
-如果你的骨架不是 `kpt3d.npy`，只需要改配置里的 `data.skeleton_file` 和 `joint_dim`。
+### 模态设置
 
-## 项目结构
+在 [configs/spa_mmd_dual_stream.json](/Users/ice/Documents/SpA-GaitFormer/configs/spa_mmd_dual_stream.json) 里修改 `model.input_mode`，可选：
 
-- [main.py](/Users/ice/Documents/SpA-GaitFormer/main.py)：训练/评估入口
-- [spa_gaitformer/data.py](/Users/ice/Documents/SpA-GaitFormer/spa_gaitformer/data.py)：SpA-MMD 目录扫描、标签读取、双模态加载
-- [spa_gaitformer/model.py](/Users/ice/Documents/SpA-GaitFormer/spa_gaitformer/model.py)：RGB、Skeleton、Fusion 三段 Transformer
+- `fusion`
+- `rgb`
+- `skeleton`
+
+这样就可以在同一套受试者划分下做三组 baseline。
+
+### 项目结构
+
+- [main.py](/Users/ice/Documents/SpA-GaitFormer/main.py)：入口脚本
+- [spa_gaitformer/data.py](/Users/ice/Documents/SpA-GaitFormer/spa_gaitformer/data.py)：受试者 split、fold 划分、RGB/skeleton 读取
+- [spa_gaitformer/model.py](/Users/ice/Documents/SpA-GaitFormer/spa_gaitformer/model.py)：支持模态消融的 Transformer
 - [spa_gaitformer/losses.py](/Users/ice/Documents/SpA-GaitFormer/spa_gaitformer/losses.py)：多任务损失
-- [spa_gaitformer/metrics.py](/Users/ice/Documents/SpA-GaitFormer/spa_gaitformer/metrics.py)：分类和严重度指标
-- [spa_gaitformer/train.py](/Users/ice/Documents/SpA-GaitFormer/spa_gaitformer/train.py)：训练、验证、checkpoint
-- [configs/spa_mmd_dual_stream.json](/Users/ice/Documents/SpA-GaitFormer/configs/spa_mmd_dual_stream.json)：配置模板
-- [splits/train_subjects.txt](/Users/ice/Documents/SpA-GaitFormer/splits/train_subjects.txt)：训练受试者列表示例
-- [splits/val_subjects.txt](/Users/ice/Documents/SpA-GaitFormer/splits/val_subjects.txt)：验证受试者列表示例
-- [splits/test_subjects.txt](/Users/ice/Documents/SpA-GaitFormer/splits/test_subjects.txt)：测试受试者列表示例
+- [spa_gaitformer/metrics.py](/Users/ice/Documents/SpA-GaitFormer/spa_gaitformer/metrics.py)：二分类和严重程度指标
+- [spa_gaitformer/train.py](/Users/ice/Documents/SpA-GaitFormer/spa_gaitformer/train.py)：交叉验证、最终训练、测试评估
 
-## Split 文件格式
-
-每个 split 文件一行一个受试者，默认自动拼接 `walk`：
-
-```text
-S01
-S02
-S03
-```
-
-也可以显式写 session：
-
-```text
-S01/walk
-S02/walk
-```
-
-## 配置
-
-配置文件中的路径会相对配置文件位置解析，因此在 Windows 和 Linux 上都可以直接改成本机路径或保留相对路径。
+### 配置
 
 关键字段：
 
-- `data.dataset_root`：`processed` 根目录
-- `data.train_split` / `val_split` / `test_split`：受试者列表
-- `data.session`：默认 `walk`
-- `data.skeleton_file`：默认 `skeleton/kpt3d/kpt3d.npy`
-- `data.max_joints`：关节点数量
-- `data.joint_dim`：`kpt3d` 用 `3`，`kpt2d` 用 `2`
-- `task.severity_mode`：`classification` 或 `regression`
+- `data.train_split`：用于交叉验证和最终训练的受试者池
+- `data.test_split`：固定测试集
+- `model.input_mode`：`fusion`、`rgb` 或 `skeleton`
+- `cv.num_folds`：默认 `2`
+- `cv.selection_metric`：默认 `loss`
 
-## 安装
+### 安装
 
 Windows:
 
@@ -228,52 +224,50 @@ Linux:
 python -m pip install -r requirements.txt
 ```
 
-如果你的 Linux 环境只有 `python3`，把命令里的 `python` 替换成 `python3` 即可。
+### 运行命令
 
-## 训练
-
-Windows:
-
-```powershell
-python main.py --config configs/spa_mmd_dual_stream.json --mode train
-```
-
-Linux:
+运行 `2-fold` 交叉验证：
 
 ```bash
-python main.py --config configs/spa_mmd_dual_stream.json --mode train
+python main.py --config configs/spa_mmd_dual_stream.json --mode cross_validate
 ```
 
-## 评估
+在全部训练池上训练最终模型：
 
 ```bash
-python main.py --config configs/spa_mmd_dual_stream.json --mode evaluate --split val
+python main.py --config configs/spa_mmd_dual_stream.json --mode train_final
 ```
 
-指定 checkpoint：
+在固定测试集上评估：
 
 ```bash
-python main.py --config configs/spa_mmd_dual_stream.json --mode evaluate --split test --checkpoint checkpoints/spa_mmd_dual_stream/best.pt
+python main.py --config configs/spa_mmd_dual_stream.json --mode evaluate --split test
 ```
 
-## 导出 Manifest
+### 输出目录
 
-如果你想在离线训练机上先把 split 导出成 CSV 供检查，可以用：
+交叉验证结果保存在：
 
-```bash
-python scripts/export_spa_mmd_manifest.py --dataset-root /path/to/processed --split-file splits/train_subjects.txt --output manifests/train.csv
+```text
+checkpoints/spa_mmd_dual_stream/cv/
 ```
 
-## 当前模型
+最终训练结果保存在：
 
-当前 baseline 是三段式 Transformer：
+```text
+checkpoints/spa_mmd_dual_stream/final/
+```
 
-1. RGB 分支：每帧 patch embedding，随后做空间 Transformer 和时间 Transformer。
-2. Skeleton 分支：每帧关节点投影后做 joint Transformer 和时间 Transformer。
-3. 融合分支：拼接两路时序 token，用融合 Transformer 的 `CLS` token 同时输出疾病分类和严重程度预测。
+### 建议汇报指标
 
-## 离线训练前建议确认
+疾病二分类：
 
-- `kpt3d.npy` 的形状是否是 `[T, J, 3]`；如果不是，我再按真实形状改 loader。
-- `severity_label.txt` 是离散等级还是连续分数；如果是有序等级，后续建议改成 ordinal loss。
-- 训练/验证/测试必须按受试者划分，不能按 session 随机拆分，否则会有主体泄漏。
+- accuracy
+- precision
+- recall
+- F1
+
+严重程度预测：
+
+- severity accuracy
+- severity macro-F1

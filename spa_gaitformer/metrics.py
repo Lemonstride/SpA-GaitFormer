@@ -8,11 +8,6 @@ from spa_gaitformer.config import TaskConfig
 class MetricTracker:
     def __init__(self, task_config: TaskConfig) -> None:
         self.task_config = task_config
-        self.severity_metric_name = (
-            "severity_acc"
-            if task_config.severity_mode == "classification"
-            else "severity_mae"
-        )
         self.batch_count = 0
         self.loss_sum = 0.0
         self.disease_loss_sum = 0.0
@@ -24,6 +19,14 @@ class MetricTracker:
         self.severity_correct = 0.0
         self.severity_abs_error = 0.0
         self.severity_total = 0.0
+        if task_config.severity_mode == "classification":
+            self.severity_confusion = torch.zeros(
+                task_config.severity_num_classes,
+                task_config.severity_num_classes,
+                dtype=torch.float64,
+            )
+        else:
+            self.severity_confusion = None
 
     def update(
         self,
@@ -56,6 +59,11 @@ class MetricTracker:
                         == severity_target[severity_mask]
                     ).sum()
                 )
+                for predicted, target in zip(
+                    severity_pred[severity_mask].tolist(),
+                    severity_target[severity_mask].tolist(),
+                ):
+                    self.severity_confusion[target, predicted] += 1
             else:
                 severity_target = batch["severity_label"].float()
                 severity_pred = outputs["severity_logits"].detach().cpu()
@@ -70,21 +78,12 @@ class MetricTracker:
         return self.current()
 
     def current(self) -> dict[str, float]:
-        disease_total = self.tp + self.tn + self.fp + self.fn
-        disease_acc = (self.tp + self.tn) / max(disease_total, 1.0)
-        if self.task_config.severity_mode == "classification":
-            severity_value = self.severity_correct / max(self.severity_total, 1.0)
-        else:
-            severity_value = self.severity_abs_error / max(self.severity_total, 1.0)
-        return {
-            "loss": self.loss_sum / max(self.batch_count, 1),
-            "disease_loss": self.disease_loss_sum / max(self.batch_count, 1),
-            "severity_loss": self.severity_loss_sum / max(self.batch_count, 1),
-            "disease_acc": disease_acc,
-            self.severity_metric_name: severity_value,
-        }
+        return self._build_metrics()
 
     def compute(self) -> dict[str, float]:
+        return self._build_metrics()
+
+    def _build_metrics(self) -> dict[str, float]:
         disease_total = self.tp + self.tn + self.fp + self.fn
         disease_acc = (self.tp + self.tn) / max(disease_total, 1.0)
         disease_precision = self.tp / max(self.tp + self.fp, 1.0)
@@ -106,8 +105,25 @@ class MetricTracker:
             metrics["severity_acc"] = self.severity_correct / max(
                 self.severity_total, 1.0
             )
+            metrics["severity_macro_f1"] = self._severity_macro_f1()
         else:
             metrics["severity_mae"] = self.severity_abs_error / max(
                 self.severity_total, 1.0
             )
         return metrics
+
+    def _severity_macro_f1(self) -> float:
+        if self.severity_confusion is None:
+            return 0.0
+        f1_scores = []
+        for index in range(self.severity_confusion.shape[0]):
+            tp = float(self.severity_confusion[index, index])
+            fp = float(self.severity_confusion[:, index].sum() - tp)
+            fn = float(self.severity_confusion[index, :].sum() - tp)
+            precision = tp / max(tp + fp, 1.0)
+            recall = tp / max(tp + fn, 1.0)
+            if precision + recall == 0:
+                f1_scores.append(0.0)
+            else:
+                f1_scores.append(2.0 * precision * recall / (precision + recall))
+        return sum(f1_scores) / max(len(f1_scores), 1)

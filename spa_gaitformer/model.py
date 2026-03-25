@@ -120,16 +120,20 @@ class DualStreamSpAGaitFormer(nn.Module):
         task_cfg: TaskConfig,
     ) -> None:
         super().__init__()
+        if model_cfg.input_mode not in {"fusion", "rgb", "skeleton"}:
+            raise ValueError("model.input_mode must be one of fusion/rgb/skeleton.")
+
         self.task_cfg = task_cfg
+        self.input_mode = model_cfg.input_mode
         self.rgb_encoder = RGBEncoder(data_cfg, model_cfg)
         self.skeleton_encoder = SkeletonEncoder(data_cfg, model_cfg)
 
-        fusion_tokens = 1 + (2 * data_cfg.num_frames)
+        max_tokens = 1 + (2 * data_cfg.num_frames)
         self.cls_token = nn.Parameter(torch.zeros(1, 1, model_cfg.embed_dim))
         self.rgb_modality = nn.Parameter(torch.zeros(1, 1, model_cfg.embed_dim))
         self.skeleton_modality = nn.Parameter(torch.zeros(1, 1, model_cfg.embed_dim))
         self.fusion_pos = nn.Parameter(
-            torch.zeros(1, fusion_tokens, model_cfg.embed_dim)
+            torch.zeros(1, max_tokens, model_cfg.embed_dim)
         )
         self.fusion_encoder = _build_transformer(
             embed_dim=model_cfg.embed_dim,
@@ -163,12 +167,15 @@ class DualStreamSpAGaitFormer(nn.Module):
         nn.init.zeros_(self.severity_head.bias)
 
     def forward(self, rgb: torch.Tensor, skeleton: torch.Tensor) -> dict[str, torch.Tensor]:
-        rgb_tokens = self.rgb_encoder(rgb) + self.rgb_modality
-        skeleton_tokens = self.skeleton_encoder(skeleton) + self.skeleton_modality
+        tokens = []
+        if self.input_mode in {"fusion", "rgb"}:
+            tokens.append(self.rgb_encoder(rgb) + self.rgb_modality)
+        if self.input_mode in {"fusion", "skeleton"}:
+            tokens.append(self.skeleton_encoder(skeleton) + self.skeleton_modality)
 
-        batch = rgb_tokens.shape[0]
+        batch = tokens[0].shape[0]
         cls = self.cls_token.expand(batch, -1, -1)
-        fused = torch.cat([cls, rgb_tokens, skeleton_tokens], dim=1)
+        fused = torch.cat([cls] + tokens, dim=1)
         fused = fused + self.fusion_pos[:, : fused.shape[1]]
         fused = self.fusion_encoder(fused)
         cls_feature = self.dropout(self.norm(fused[:, 0]))

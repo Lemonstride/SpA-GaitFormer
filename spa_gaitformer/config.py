@@ -47,6 +47,7 @@ class DataConfig:
 
 @dataclass
 class ModelConfig:
+    input_mode: str = "fusion"
     embed_dim: int = 256
     rgb_patch_size: int = 16
     rgb_spatial_depth: int = 2
@@ -83,11 +84,22 @@ class TrainConfig:
 
 
 @dataclass
+class CVConfig:
+    enabled: bool = True
+    num_folds: int = 2
+    seed: int = 42
+    selection_metric: str = "loss"
+    use_mean_best_epoch: bool = True
+    final_epochs: int | None = None
+
+
+@dataclass
 class ExperimentConfig:
     data: DataConfig
     model: ModelConfig = field(default_factory=ModelConfig)
     task: TaskConfig = field(default_factory=TaskConfig)
     train: TrainConfig = field(default_factory=TrainConfig)
+    cv: CVConfig = field(default_factory=CVConfig)
 
     @classmethod
     def from_json(cls, path: str | Path) -> "ExperimentConfig":
@@ -109,6 +121,7 @@ class ExperimentConfig:
             model=ModelConfig(**raw.get("model", {})),
             task=TaskConfig(**raw.get("task", {})),
             train=TrainConfig(**train_raw),
+            cv=CVConfig(**raw.get("cv", {})),
         )
 
     @staticmethod
@@ -142,6 +155,7 @@ class ExperimentConfig:
             "model": vars(self.model),
             "task": vars(self.task),
             "train": vars(self.train),
+            "cv": vars(self.cv),
         }
 
 

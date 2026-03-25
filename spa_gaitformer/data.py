@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import csv
 import json
+import random
+from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -50,6 +52,67 @@ def load_records_for_split(
         split_entries=subject_entries,
         data_config=data_config,
     )
+
+
+def create_stratified_folds(
+    records: list[SampleRecord],
+    num_folds: int,
+    seed: int,
+) -> list[tuple[list[SampleRecord], list[SampleRecord]]]:
+    if num_folds < 2:
+        raise ValueError("num_folds must be at least 2.")
+    if len(records) < num_folds:
+        raise ValueError("Number of records must be >= num_folds.")
+
+    grouped: dict[int, list[SampleRecord]] = defaultdict(list)
+    for record in records:
+        grouped[_stratify_label(record)].append(record)
+
+    rng = random.Random(seed)
+    fold_buckets: list[list[SampleRecord]] = [[] for _ in range(num_folds)]
+    for label in sorted(grouped):
+        label_records = grouped[label][:]
+        rng.shuffle(label_records)
+        for index, record in enumerate(label_records):
+            fold_buckets[index % num_folds].append(record)
+
+    folds: list[tuple[list[SampleRecord], list[SampleRecord]]] = []
+    for fold_index in range(num_folds):
+        val_records = sorted(
+            fold_buckets[fold_index],
+            key=lambda record: record.sample_id,
+        )
+        train_records = sorted(
+            [
+                record
+                for bucket_index, bucket in enumerate(fold_buckets)
+                if bucket_index != fold_index
+                for record in bucket
+            ],
+            key=lambda record: record.sample_id,
+        )
+        folds.append((train_records, val_records))
+    return folds
+
+
+def summarize_records(records: list[SampleRecord]) -> dict[str, dict[str, int]]:
+    binary = {"healthy": 0, "spa": 0}
+    severity: dict[str, int] = defaultdict(int)
+    for record in records:
+        if record.disease_label == 0:
+            binary["healthy"] += 1
+        else:
+            binary["spa"] += 1
+        severity_key = (
+            str(int(record.severity_label))
+            if record.severity_label >= 0
+            else "unknown"
+        )
+        severity[severity_key] += 1
+    return {
+        "binary": binary,
+        "severity": dict(sorted(severity.items(), key=lambda item: item[0])),
+    }
 
 
 def read_manifest(path: str | Path) -> list[SampleRecord]:
@@ -120,7 +183,9 @@ def build_records_from_processed_root(
             "skeleton": skeleton_path,
             "binary_label": binary_label_path,
         }
-        missing = [name for name, current in required_paths.items() if not current.exists()]
+        missing = [
+            name for name, current in required_paths.items() if not current.exists()
+        ]
         if missing:
             message = (
                 f"Missing required files for {subject_id}/{session}: {', '.join(missing)}"
@@ -132,7 +197,9 @@ def build_records_from_processed_root(
 
         severity_label = -1.0
         if severity_label_path.exists():
-            severity_label = parse_severity_label(severity_label_path.read_text(encoding="utf-8"))
+            severity_label = parse_severity_label(
+                severity_label_path.read_text(encoding="utf-8")
+            )
 
         sample_id = f"{subject_id}/{session}"
         records.append(
@@ -152,7 +219,7 @@ def build_records_from_processed_root(
 
     if not records:
         raise ValueError("No valid samples were found for the requested split.")
-    return records
+    return sorted(records, key=lambda record: record.sample_id)
 
 
 def parse_binary_label(raw: str) -> int:
@@ -195,6 +262,12 @@ def _parse_split_entry(entry: str, default_session: str) -> tuple[str, str]:
     if len(parts) == 1:
         return parts[0], default_session
     return parts[0], parts[1]
+
+
+def _stratify_label(record: SampleRecord) -> int:
+    if record.severity_label >= 0:
+        return int(record.severity_label)
+    return int(record.disease_label)
 
 
 def _uniform_frame_indices(length: int, num_frames: int) -> torch.Tensor:
@@ -346,11 +419,16 @@ def load_skeleton_sequence(
 class SpAMMDDataset(Dataset[dict[str, torch.Tensor]]):
     def __init__(
         self,
-        split: str,
         data_config: DataConfig,
         task_config: TaskConfig,
+        split: str | None = None,
+        records: list[SampleRecord] | None = None,
     ) -> None:
-        self.records = load_records_for_split(split, data_config)
+        if records is None and split is None:
+            raise ValueError("Either split or records must be provided.")
+        self.records = (
+            records if records is not None else load_records_for_split(split, data_config)
+        )
         self.data_config = data_config
         self.task_config = task_config
 
