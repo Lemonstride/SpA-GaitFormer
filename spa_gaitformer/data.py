@@ -61,25 +61,34 @@ def create_stratified_folds(
 ) -> list[tuple[list[SampleRecord], list[SampleRecord]]]:
     if num_folds < 2:
         raise ValueError("num_folds must be at least 2.")
-    if len(records) < num_folds:
-        raise ValueError("Number of records must be >= num_folds.")
+    subject_groups = _group_records_by_subject(records)
+    if len(subject_groups) < num_folds:
+        raise ValueError("Number of subjects must be >= num_folds.")
 
-    grouped: dict[int, list[SampleRecord]] = defaultdict(list)
-    for record in records:
-        grouped[_stratify_label(record)].append(record)
+    grouped: dict[int, list[list[SampleRecord]]] = defaultdict(list)
+    for subject_id in sorted(subject_groups):
+        subject_records = sorted(
+            subject_groups[subject_id],
+            key=lambda record: record.sample_id,
+        )
+        grouped[_subject_stratify_label(subject_records)].append(subject_records)
 
     rng = random.Random(seed)
-    fold_buckets: list[list[SampleRecord]] = [[] for _ in range(num_folds)]
+    fold_buckets: list[list[list[SampleRecord]]] = [[] for _ in range(num_folds)]
     for label in sorted(grouped):
-        label_records = grouped[label][:]
-        rng.shuffle(label_records)
-        for index, record in enumerate(label_records):
-            fold_buckets[index % num_folds].append(record)
+        label_groups = grouped[label][:]
+        rng.shuffle(label_groups)
+        for index, subject_records in enumerate(label_groups):
+            fold_buckets[index % num_folds].append(subject_records)
 
     folds: list[tuple[list[SampleRecord], list[SampleRecord]]] = []
     for fold_index in range(num_folds):
         val_records = sorted(
-            fold_buckets[fold_index],
+            [
+                record
+                for subject_records in fold_buckets[fold_index]
+                for record in subject_records
+            ],
             key=lambda record: record.sample_id,
         )
         train_records = sorted(
@@ -87,7 +96,8 @@ def create_stratified_folds(
                 record
                 for bucket_index, bucket in enumerate(fold_buckets)
                 if bucket_index != fold_index
-                for record in bucket
+                for subject_records in bucket
+                for record in subject_records
             ],
             key=lambda record: record.sample_id,
         )
@@ -98,11 +108,14 @@ def create_stratified_folds(
 def summarize_records(records: list[SampleRecord]) -> dict[str, dict[str, int]]:
     binary = {"healthy": 0, "spa": 0}
     severity: dict[str, int] = defaultdict(int)
+    sessions: dict[str, int] = defaultdict(int)
+    subjects = {record.subject_id for record in records}
     for record in records:
         if record.disease_label == 0:
             binary["healthy"] += 1
         else:
             binary["spa"] += 1
+        sessions[record.session] += 1
         severity_key = (
             str(int(record.severity_label))
             if record.severity_label >= 0
@@ -110,6 +123,8 @@ def summarize_records(records: list[SampleRecord]) -> dict[str, dict[str, int]]:
         )
         severity[severity_key] += 1
     return {
+        "subjects": {"count": len(subjects)},
+        "sessions": dict(sorted(sessions.items(), key=lambda item: item[0])),
         "binary": binary,
         "severity": dict(sorted(severity.items(), key=lambda item: item[0])),
     }
@@ -170,52 +185,45 @@ def build_records_from_processed_root(
 ) -> list[SampleRecord]:
     records: list[SampleRecord] = []
     for entry in split_entries:
-        subject_id, session = _parse_split_entry(entry, data_config.session)
-        session_dir = dataset_root / subject_id / session
-        rgb_path = session_dir / data_config.rgb_dir
-        skeleton_path = session_dir / data_config.skeleton_file
-        binary_label_path = session_dir / data_config.binary_label_file
-        severity_label_path = session_dir / data_config.severity_label_file
+        subject_id, sessions = _parse_split_entry(entry, data_config)
+        for session in sessions:
+            session_dir = dataset_root / subject_id / session
+            rgb_path = session_dir / data_config.rgb_dir
+            skeleton_path = session_dir / data_config.skeleton_file
 
-        required_paths = {
-            "session": session_dir,
-            "rgb": rgb_path,
-            "skeleton": skeleton_path,
-            "binary_label": binary_label_path,
-        }
-        missing = [
-            name for name, current in required_paths.items() if not current.exists()
-        ]
-        if missing:
-            message = (
-                f"Missing required files for {subject_id}/{session}: {', '.join(missing)}"
-            )
-            if data_config.strict_missing_files:
-                raise FileNotFoundError(message)
-            print(f"[skip] {message}")
-            continue
+            required_paths = {
+                "session": session_dir,
+                "rgb": rgb_path,
+                "skeleton": skeleton_path,
+            }
+            missing = [
+                name for name, current in required_paths.items() if not current.exists()
+            ]
+            if missing:
+                message = (
+                    f"Missing required files for {subject_id}/{session}: "
+                    f"{', '.join(missing)}"
+                )
+                if data_config.strict_missing_files:
+                    raise FileNotFoundError(message)
+                print(f"[skip] {message}")
+                continue
 
-        severity_label = -1.0
-        if severity_label_path.exists():
-            severity_label = parse_severity_label(
-                severity_label_path.read_text(encoding="utf-8")
-            )
+            disease_label, severity_label = _read_session_labels(session_dir, data_config)
 
-        sample_id = f"{subject_id}/{session}"
-        records.append(
-            SampleRecord(
-                sample_id=sample_id,
-                subject_id=subject_id,
-                session=session,
-                session_dir=str(session_dir),
-                rgb_path=str(rgb_path),
-                skeleton_path=str(skeleton_path),
-                disease_label=parse_binary_label(
-                    binary_label_path.read_text(encoding="utf-8")
-                ),
-                severity_label=severity_label,
+            sample_id = f"{subject_id}/{session}"
+            records.append(
+                SampleRecord(
+                    sample_id=sample_id,
+                    subject_id=subject_id,
+                    session=session,
+                    session_dir=str(session_dir),
+                    rgb_path=str(rgb_path),
+                    skeleton_path=str(skeleton_path),
+                    disease_label=disease_label,
+                    severity_label=severity_label,
+                )
             )
-        )
 
     if not records:
         raise ValueError("No valid samples were found for the requested split.")
@@ -256,18 +264,101 @@ def _split_sample_id(sample_id: str) -> tuple[str, str]:
     return parts[0], "walk"
 
 
-def _parse_split_entry(entry: str, default_session: str) -> tuple[str, str]:
+def _parse_split_entry(entry: str, data_config: DataConfig) -> tuple[str, list[str]]:
     normalized = entry.replace("\\", "/")
     parts = [part for part in normalized.split("/") if part]
     if len(parts) == 1:
-        return parts[0], default_session
-    return parts[0], parts[1]
+        return parts[0], _resolve_sessions(data_config)
+    return parts[0], [parts[1]]
 
 
 def _stratify_label(record: SampleRecord) -> int:
     if record.severity_label >= 0:
         return int(record.severity_label)
     return int(record.disease_label)
+
+
+def _subject_stratify_label(records: list[SampleRecord]) -> int:
+    labels = {_stratify_label(record) for record in records}
+    if len(labels) != 1:
+        raise ValueError(
+            f"Inconsistent stratification labels across sessions for subject "
+            f"{records[0].subject_id}: {sorted(labels)}"
+        )
+    return next(iter(labels))
+
+
+def _group_records_by_subject(
+    records: list[SampleRecord],
+) -> dict[str, list[SampleRecord]]:
+    grouped: dict[str, list[SampleRecord]] = defaultdict(list)
+    for record in records:
+        grouped[record.subject_id].append(record)
+    return grouped
+
+
+def _resolve_sessions(data_config: DataConfig) -> list[str]:
+    if data_config.sessions:
+        return list(dict.fromkeys(data_config.sessions))
+    return [data_config.session]
+
+
+def _read_session_labels(
+    session_dir: Path,
+    data_config: DataConfig,
+) -> tuple[int, float]:
+    annotation = _load_annotation_json(session_dir / data_config.annotation_file)
+
+    binary_label = _read_required_label(
+        label_path=session_dir / data_config.binary_label_file,
+        annotation=annotation,
+        annotation_key="binary_label",
+        parser=parse_binary_label,
+        label_name="binary label",
+    )
+    severity_label = _read_optional_label(
+        label_path=session_dir / data_config.severity_label_file,
+        annotation=annotation,
+        annotation_key="severity_label",
+        parser=parse_severity_label,
+    )
+    return binary_label, severity_label
+
+
+def _load_annotation_json(path: Path) -> dict[str, Any] | None:
+    if not path.exists():
+        return None
+    with path.open("r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def _read_required_label(
+    label_path: Path,
+    annotation: dict[str, Any] | None,
+    annotation_key: str,
+    parser,
+    label_name: str,
+) -> int:
+    if label_path.exists():
+        return parser(label_path.read_text(encoding="utf-8"))
+    if annotation is not None and annotation_key in annotation:
+        return parser(str(annotation[annotation_key]))
+    raise FileNotFoundError(
+        f"Missing {label_name}: {label_path} and annotation key {annotation_key!r}."
+    )
+
+
+def _read_optional_label(
+    label_path: Path,
+    annotation: dict[str, Any] | None,
+    annotation_key: str,
+    parser,
+) -> float:
+    if label_path.exists():
+        return parser(label_path.read_text(encoding="utf-8"))
+    if annotation is not None and annotation_key in annotation:
+        return parser(str(annotation[annotation_key]))
+    return -1.0
 
 
 def _uniform_frame_indices(length: int, num_frames: int) -> torch.Tensor:
@@ -332,7 +423,7 @@ def load_rgb_sequence(path: str | Path, num_frames: int, image_size: int) -> tor
         frames = []
         for index in indices.tolist():
             image = Image.open(frame_paths[index]).convert("RGB")
-            frame = torch.from_numpy(np.asarray(image)).permute(2, 0, 1).float()
+            frame = torch.from_numpy(np.array(image, copy=True)).permute(2, 0, 1).float()
             frames.append(frame)
         rgb = torch.stack(frames, dim=0)
     elif rgb_path.suffix.lower() in {".pt", ".pth"}:
@@ -362,12 +453,12 @@ def _to_temporal_joints(tensor: torch.Tensor, joint_dim: int) -> torch.Tensor:
         raise ValueError(
             f"Expected 3D skeleton tensor, got shape {tuple(tensor.shape)}."
         )
-    if tensor.shape[-1] == joint_dim:
-        return tensor.float()
-    if tensor.shape[1] == joint_dim:
-        return tensor.permute(0, 2, 1).float()
+    if tensor.shape[-1] >= joint_dim:
+        return tensor[..., :joint_dim].float()
+    if tensor.shape[1] >= joint_dim:
+        return tensor.permute(0, 2, 1)[..., :joint_dim].float()
     raise ValueError(
-        "Skeleton tensor must be [T, J, C] or [T, C, J] with matching coordinate dim."
+        "Skeleton tensor must be [T, J, C] or [T, C, J] with coordinate dim >= joint_dim."
     )
 
 

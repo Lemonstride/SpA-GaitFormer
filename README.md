@@ -27,15 +27,26 @@ The default split files already follow this design:
 
 ### Data Assumptions
 
-The current implementation directly targets the SpA-MMD `processed/subject/session` structure and uses the gait task by default:
+The current implementation directly targets the SpA-MMD `processed/subject/session` structure and can train on one or more sessions while keeping subject-level separation:
 
 ```text
 SpA-MMD/
 └── processed/
     ├── S01/
-    │   └── walk/
+    │   ├── walk/
+    │   │   ├── rgb/
+    │   │   ├── labels/
+    │   │   └── skeleton/
+    │   │       └── kpt3d/
+    │   │           └── kpt3d.npy
+    │   └── head_turn/
     │       ├── rgb/
     │       ├── labels/
+    │       │   ├── binary_label.txt
+    │       │   ├── severity_label.txt
+    │       │   ├── disease_annotations.json
+    │       │   └── head_turn_state/
+    │       │       └── summary.json
     │       └── skeleton/
     │           └── kpt3d/
     │               └── kpt3d.npy
@@ -44,10 +55,15 @@ SpA-MMD/
 
 Default inputs:
 
-- RGB: `walk/rgb/*.png`
-- Skeleton: `walk/skeleton/kpt3d/kpt3d.npy`
-- Binary label: `walk/labels/binary_label.txt`
-- Severity label: `walk/labels/severity_label.txt`
+- Sessions: `walk` and `head_turn`
+- RGB: `session/rgb/*.png`
+- Skeleton: `session/skeleton/kpt3d/kpt3d.npy`
+- Default skeleton shape: `T x 33 x 4`, using the first 3 coordinates for training
+- Binary label: `session/labels/binary_label.txt`
+- Severity label: `session/labels/severity_label.txt`
+- Label fallback: `session/labels/disease_annotations.json`
+
+Cross-validation is grouped by subject, so `walk` and `head_turn` from the same subject always stay in the same fold.
 
 ### Modalities
 
@@ -74,6 +90,7 @@ Important fields:
 
 - `data.train_split`: subject pool used for cross-validation and final training
 - `data.test_split`: held-out test subjects
+- `data.sessions`: which sessions to load, for example `["walk", "head_turn"]`
 - `model.input_mode`: `fusion`, `rgb`, or `skeleton`
 - `cv.num_folds`: default `2`
 - `cv.selection_metric`: default `loss`
@@ -159,15 +176,26 @@ For severity prediction:
 
 ### 数据假设
 
-当前实现直接适配 SpA-MMD 的 `processed/subject/session` 结构，默认使用 gait 任务：
+当前实现直接适配 SpA-MMD 的 `processed/subject/session` 结构，并支持在保持受试者隔离的前提下同时训练一个或多个 session：
 
 ```text
 SpA-MMD/
 └── processed/
     ├── S01/
-    │   └── walk/
+    │   ├── walk/
+    │   │   ├── rgb/
+    │   │   ├── labels/
+    │   │   └── skeleton/
+    │   │       └── kpt3d/
+    │   │           └── kpt3d.npy
+    │   └── head_turn/
     │       ├── rgb/
     │       ├── labels/
+    │       │   ├── binary_label.txt
+    │       │   ├── severity_label.txt
+    │       │   ├── disease_annotations.json
+    │       │   └── head_turn_state/
+    │       │       └── summary.json
     │       └── skeleton/
     │           └── kpt3d/
     │               └── kpt3d.npy
@@ -176,10 +204,15 @@ SpA-MMD/
 
 默认读取：
 
-- RGB：`walk/rgb/*.png`
-- Skeleton：`walk/skeleton/kpt3d/kpt3d.npy`
-- 二分类标签：`walk/labels/binary_label.txt`
-- 严重程度标签：`walk/labels/severity_label.txt`
+- session：`walk` 和 `head_turn`
+- RGB：`session/rgb/*.png`
+- Skeleton：`session/skeleton/kpt3d/kpt3d.npy`
+- 默认 skeleton 形状：`T x 33 x 4`，训练时使用前 3 个坐标维度
+- 二分类标签：`session/labels/binary_label.txt`
+- 严重程度标签：`session/labels/severity_label.txt`
+- 标签回退：`session/labels/disease_annotations.json`
+
+交叉验证会按受试者分组，所以同一个人的 `walk` 和 `head_turn` 一定会落在同一个 fold 里，不会数据泄漏。
 
 ### 模态设置
 
@@ -206,6 +239,7 @@ SpA-MMD/
 
 - `data.train_split`：用于交叉验证和最终训练的受试者池
 - `data.test_split`：固定测试集
+- `data.sessions`：要读取的 session，例如 `["walk", "head_turn"]`
 - `model.input_mode`：`fusion`、`rgb` 或 `skeleton`
 - `cv.num_folds`：默认 `2`
 - `cv.selection_metric`：默认 `loss`

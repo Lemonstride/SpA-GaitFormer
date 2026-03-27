@@ -121,6 +121,14 @@ def _run_epoch(
     return tracker.compute()
 
 
+def _subject_ids(records: list[SampleRecord]) -> list[str]:
+    return sorted({record.subject_id for record in records})
+
+
+def _sample_ids(records: list[SampleRecord]) -> list[str]:
+    return [record.sample_id for record in records]
+
+
 def _save_checkpoint(
     path: Path,
     model: nn.Module,
@@ -208,8 +216,10 @@ def _train_with_validation(
         {
             "train_summary": summarize_records(train_records),
             "val_summary": summarize_records(val_records),
-            "train_ids": [record.subject_id for record in train_records],
-            "val_ids": [record.subject_id for record in val_records],
+            "train_subject_ids": _subject_ids(train_records),
+            "val_subject_ids": _subject_ids(val_records),
+            "train_sample_ids": _sample_ids(train_records),
+            "val_sample_ids": _sample_ids(val_records),
         },
     )
 
@@ -342,7 +352,8 @@ def train_final(config: ExperimentConfig) -> dict[str, object]:
         final_dir / "split_summary.json",
         {
             "train_summary": summarize_records(train_records),
-            "train_ids": [record.subject_id for record in train_records],
+            "train_subject_ids": _subject_ids(train_records),
+            "train_sample_ids": _sample_ids(train_records),
         },
     )
 

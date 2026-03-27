@@ -27,10 +27,12 @@ class DataConfig:
     val_split: str | None = None
     test_split: str | None = None
     session: str = "walk"
+    sessions: list[str] | None = None
     rgb_dir: str = "rgb"
     skeleton_file: str = "skeleton/kpt3d/kpt3d.npy"
     binary_label_file: str = "labels/binary_label.txt"
     severity_label_file: str = "labels/severity_label.txt"
+    annotation_file: str = "labels/disease_annotations.json"
     strict_missing_files: bool = True
     num_frames: int = 24
     image_size: int = 224
@@ -40,7 +42,7 @@ class DataConfig:
     rgb_std: list[float] = field(
         default_factory=lambda: [0.229, 0.224, 0.225]
     )
-    max_joints: int = 25
+    max_joints: int = 33
     joint_dim: int = 3
     normalize_skeleton: bool = True
 
