@@ -1,7 +1,7 @@
 {
   "data": {
     "dataset_root": "F:/SpA-MMD/processed",
-    "train_split": "F:SpA-MMD/splits/train_subjects.txt",
+    "train_split": "F:/SpA-MMD/splits/train_subjects.txt",
     "val_split": null,
     "test_split": "F:/SpA-MMD/splits/test_subjects.txt",
     "session": "walk",
@@ -38,9 +38,8 @@
     "severity_num_classes": 4,
     "disease_loss_weight": 1.0,
     "severity_loss_weight": 1.0,
-    "disease_pos_weight": 2.7
+    "disease_pos_weight": null
   },
-
   "train": {
     "batch_size": 4,
     "epochs": 50,

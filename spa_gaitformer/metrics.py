@@ -16,6 +16,11 @@ class MetricTracker:
         self.tn = 0.0
         self.fp = 0.0
         self.fn = 0.0
+        self.disease_prob_sum = 0.0
+        self.disease_pred_sum = 0.0
+        self.disease_count = 0.0
+        self.disease_probs: list[float] = []
+        self.disease_targets: list[float] = []
         self.severity_correct = 0.0
         self.severity_abs_error = 0.0
         self.severity_total = 0.0
@@ -40,13 +45,17 @@ class MetricTracker:
         self.severity_loss_sum += loss_logs["severity_loss"]
 
         disease_target = batch["disease_label"].float()
-        disease_pred = (
-            torch.sigmoid(outputs["disease_logits"].detach().cpu()) >= 0.5
-        ).float()
+        disease_prob = torch.sigmoid(outputs["disease_logits"].detach().cpu())
+        disease_pred = (disease_prob >= 0.5).float()
         self.tp += float(((disease_pred == 1) & (disease_target == 1)).sum())
         self.tn += float(((disease_pred == 0) & (disease_target == 0)).sum())
         self.fp += float(((disease_pred == 1) & (disease_target == 0)).sum())
         self.fn += float(((disease_pred == 0) & (disease_target == 1)).sum())
+        self.disease_prob_sum += float(disease_prob.sum())
+        self.disease_pred_sum += float(disease_pred.sum())
+        self.disease_count += float(disease_pred.numel())
+        self.disease_probs.extend(disease_prob.flatten().tolist())
+        self.disease_targets.extend(disease_target.flatten().tolist())
 
         severity_mask = batch["severity_mask"] > 0
         if severity_mask.any():
@@ -100,7 +109,12 @@ class MetricTracker:
             "disease_precision": disease_precision,
             "disease_recall": disease_recall,
             "disease_f1": disease_f1,
+            "disease_pos_rate": self.disease_pred_sum / max(self.disease_count, 1.0),
+            "disease_prob_mean": self.disease_prob_sum / max(self.disease_count, 1.0),
         }
+        best_f1, best_threshold = self._best_disease_f1()
+        metrics["disease_f1_best"] = best_f1
+        metrics["disease_best_threshold"] = best_threshold
         if self.task_config.severity_mode == "classification":
             metrics["severity_acc"] = self.severity_correct / max(
                 self.severity_total, 1.0
@@ -127,3 +141,27 @@ class MetricTracker:
             else:
                 f1_scores.append(2.0 * precision * recall / (precision + recall))
         return sum(f1_scores) / max(len(f1_scores), 1)
+
+    def _best_disease_f1(self) -> tuple[float, float]:
+        if not self.disease_probs:
+            return 0.0, 0.5
+        probs = torch.tensor(self.disease_probs, dtype=torch.float32)
+        targets = torch.tensor(self.disease_targets, dtype=torch.float32)
+        thresholds = torch.linspace(0.0, 1.0, steps=101)
+        best_f1 = 0.0
+        best_threshold = 0.5
+        for threshold in thresholds:
+            preds = (probs >= threshold).float()
+            tp = float(((preds == 1) & (targets == 1)).sum())
+            fp = float(((preds == 1) & (targets == 0)).sum())
+            fn = float(((preds == 0) & (targets == 1)).sum())
+            precision = tp / max(tp + fp, 1.0)
+            recall = tp / max(tp + fn, 1.0)
+            if precision + recall == 0:
+                f1 = 0.0
+            else:
+                f1 = 2.0 * precision * recall / (precision + recall)
+            if f1 > best_f1:
+                best_f1 = f1
+                best_threshold = float(threshold)
+        return best_f1, best_threshold

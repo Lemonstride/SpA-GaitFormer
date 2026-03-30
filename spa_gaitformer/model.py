@@ -22,7 +22,11 @@ def _build_transformer(
         norm_first=True,
         activation="gelu",
     )
-    return nn.TransformerEncoder(layer, num_layers=depth)
+    return nn.TransformerEncoder(
+        layer,
+        num_layers=depth,
+        enable_nested_tensor=False,
+    )
 
 
 class RGBEncoder(nn.Module):

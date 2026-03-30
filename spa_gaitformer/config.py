@@ -83,6 +83,7 @@ class TrainConfig:
     log_interval: int = 10
     amp: bool = False
     seed: int = 42
+    balance_disease: bool = False
 
 
 @dataclass

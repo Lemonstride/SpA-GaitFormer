@@ -94,6 +94,7 @@ Important fields:
 - `model.input_mode`: `fusion`, `rgb`, or `skeleton`
 - `cv.num_folds`: default `2`
 - `cv.selection_metric`: default `loss`
+- `train.balance_disease`: enable balanced sampling for the binary task
 
 ### Installation
 
@@ -243,6 +244,7 @@ SpA-MMD/
 - `model.input_mode`：`fusion`、`rgb` 或 `skeleton`
 - `cv.num_folds`：默认 `2`
 - `cv.selection_metric`：默认 `loss`
+- `train.balance_disease`：二分类任务的平衡采样
 
 ### 安装
 

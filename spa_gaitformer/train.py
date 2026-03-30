@@ -9,7 +9,7 @@ from pathlib import Path
 import torch
 from torch import nn
 from torch.optim import AdamW
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from spa_gaitformer.config import ExperimentConfig
 from spa_gaitformer.data import (
@@ -47,10 +47,30 @@ def _build_loader_from_records(
         task_config=config.task,
         records=records,
     )
+    sampler = None
+    if shuffle and config.train.balance_disease:
+        counts = {0: 0, 1: 0}
+        for record in records:
+            counts[int(record.disease_label)] += 1
+        if counts[0] > 0 and counts[1] > 0:
+            total = counts[0] + counts[1]
+            class_weights = {
+                0: total / (2.0 * counts[0]),
+                1: total / (2.0 * counts[1]),
+            }
+            weights = [
+                class_weights[int(record.disease_label)] for record in records
+            ]
+            sampler = WeightedRandomSampler(
+                weights,
+                num_samples=len(weights),
+                replacement=True,
+            )
     return DataLoader(
         dataset,
         batch_size=config.train.batch_size,
-        shuffle=shuffle,
+        shuffle=shuffle and sampler is None,
+        sampler=sampler,
         num_workers=config.train.num_workers,
         pin_memory=config.train.device.startswith("cuda"),
         drop_last=False,
@@ -59,7 +79,7 @@ def _build_loader_from_records(
 
 def _create_amp_context(device: torch.device, enabled: bool):
     if enabled and device.type == "cuda":
-        return torch.cuda.amp.autocast()
+        return torch.amp.autocast(device_type="cuda")
     return nullcontext()
 
 
@@ -81,7 +101,7 @@ def _run_epoch(
     config: ExperimentConfig,
     device: torch.device,
     optimizer: torch.optim.Optimizer | None,
-    scaler: torch.cuda.amp.GradScaler | None,
+    scaler: torch.amp.GradScaler | None,
 ) -> dict[str, float]:
     is_train = optimizer is not None
     model.train(is_train)
@@ -201,8 +221,9 @@ def _train_with_validation(
         lr=config.train.learning_rate,
         weight_decay=config.train.weight_decay,
     )
-    scaler = torch.cuda.amp.GradScaler(
-        enabled=config.train.amp and device.type == "cuda"
+    scaler = torch.amp.GradScaler(
+        device_type="cuda",
+        enabled=config.train.amp and device.type == "cuda",
     )
     selection_metric = config.cv.selection_metric
     best_metric = _initial_best(selection_metric)
@@ -236,7 +257,11 @@ def _train_with_validation(
             f"epoch={epoch} "
             f"train_loss={train_logs['loss']:.4f} "
             f"val_loss={val_logs['loss']:.4f} "
-            f"{_log_primary_metric(val_logs, config)}"
+            f"{_log_primary_metric(val_logs, config)} "
+            f"disease_pos_rate={val_logs['disease_pos_rate']:.3f} "
+            f"disease_prob_mean={val_logs['disease_prob_mean']:.3f} "
+            f"disease_f1_best={val_logs['disease_f1_best']:.4f} "
+            f"disease_best_threshold={val_logs['disease_best_threshold']:.2f}"
         )
 
         candidate = float(val_logs[selection_metric])
@@ -342,8 +367,9 @@ def train_final(config: ExperimentConfig) -> dict[str, object]:
         lr=config.train.learning_rate,
         weight_decay=config.train.weight_decay,
     )
-    scaler = torch.cuda.amp.GradScaler(
-        enabled=config.train.amp and device.type == "cuda"
+    scaler = torch.amp.GradScaler(
+        device_type="cuda",
+        enabled=config.train.amp and device.type == "cuda",
     )
 
     final_dir = Path(config.train.checkpoint_dir) / "final"
