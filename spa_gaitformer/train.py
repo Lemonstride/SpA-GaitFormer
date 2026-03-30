@@ -83,6 +83,15 @@ def _create_amp_context(device: torch.device, enabled: bool):
     return nullcontext()
 
 
+def _build_grad_scaler(device: torch.device, enabled: bool) -> torch.amp.GradScaler:
+    if not enabled or device.type != "cuda":
+        return torch.amp.GradScaler(enabled=False)
+    try:
+        return torch.amp.GradScaler(device_type="cuda", enabled=True)
+    except TypeError:
+        return torch.amp.GradScaler(enabled=True)
+
+
 def _log_primary_metric(metrics: dict[str, float], config: ExperimentConfig) -> str:
     if config.task.severity_mode == "classification":
         return (
@@ -221,10 +230,7 @@ def _train_with_validation(
         lr=config.train.learning_rate,
         weight_decay=config.train.weight_decay,
     )
-    scaler = torch.amp.GradScaler(
-        device_type="cuda",
-        enabled=config.train.amp and device.type == "cuda",
-    )
+    scaler = _build_grad_scaler(device, config.train.amp)
     selection_metric = config.cv.selection_metric
     best_metric = _initial_best(selection_metric)
     best_epoch = 0
@@ -367,10 +373,7 @@ def train_final(config: ExperimentConfig) -> dict[str, object]:
         lr=config.train.learning_rate,
         weight_decay=config.train.weight_decay,
     )
-    scaler = torch.amp.GradScaler(
-        device_type="cuda",
-        enabled=config.train.amp and device.type == "cuda",
-    )
+    scaler = _build_grad_scaler(device, config.train.amp)
 
     final_dir = Path(config.train.checkpoint_dir) / "final"
     final_dir.mkdir(parents=True, exist_ok=True)
