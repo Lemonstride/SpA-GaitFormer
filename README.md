@@ -92,6 +92,7 @@ Important fields:
 - `data.test_split`: held-out test subjects
 - `data.sessions`: which sessions to load, for example `["walk", "head_turn"]`
 - `model.input_mode`: `fusion`, `rgb`, or `skeleton`
+- `model.model_type`: `transformer` or `cnn`
 - `cv.num_folds`: default `2`
 - `cv.selection_metric`: default `loss`
 - `train.balance_disease`: enable balanced sampling for the binary task
@@ -298,6 +299,7 @@ SpA-MMD/
 - `data.test_split`：固定测试集
 - `data.sessions`：要读取的 session，例如 `["walk", "head_turn"]`
 - `model.input_mode`：`fusion`、`rgb` 或 `skeleton`
+- `model.model_type`：`transformer` 或 `cnn`
 - `cv.num_folds`：默认 `2`
 - `cv.selection_metric`：默认 `loss`
 - `train.balance_disease`：二分类任务的平衡采样

@@ -78,6 +78,35 @@ class RGBEncoder(nn.Module):
         return self.norm(rgb)
 
 
+class RGBCNNEncoder(nn.Module):
+    def __init__(self, data_cfg: DataConfig, model_cfg: ModelConfig) -> None:
+        super().__init__()
+        self.net = nn.Sequential(
+            nn.Conv2d(3, 64, kernel_size=5, stride=2, padding=2),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(128, model_cfg.embed_dim, kernel_size=3, stride=2, padding=1),
+            nn.BatchNorm2d(model_cfg.embed_dim),
+            nn.ReLU(inplace=True),
+            nn.AdaptiveAvgPool2d(1),
+        )
+        self.temporal_pos = nn.Parameter(
+            torch.zeros(1, data_cfg.num_frames, model_cfg.embed_dim)
+        )
+        self.norm = nn.LayerNorm(model_cfg.embed_dim)
+
+    def forward(self, rgb: torch.Tensor) -> torch.Tensor:
+        batch, frames, channels, height, width = rgb.shape
+        rgb = rgb.reshape(batch * frames, channels, height, width)
+        features = self.net(rgb).flatten(1)
+        features = features.reshape(batch, frames, -1)
+        features = features + self.temporal_pos[:, :frames]
+        return self.norm(features)
+
+
 class SkeletonEncoder(nn.Module):
     def __init__(self, data_cfg: DataConfig, model_cfg: ModelConfig) -> None:
         super().__init__()
@@ -116,6 +145,29 @@ class SkeletonEncoder(nn.Module):
         return self.norm(skeleton)
 
 
+class SkeletonCNNEncoder(nn.Module):
+    def __init__(self, data_cfg: DataConfig, model_cfg: ModelConfig) -> None:
+        super().__init__()
+        self.conv = nn.Sequential(
+            nn.Conv1d(data_cfg.joint_dim, model_cfg.embed_dim, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+            nn.Conv1d(model_cfg.embed_dim, model_cfg.embed_dim, kernel_size=3, padding=1),
+            nn.ReLU(inplace=True),
+        )
+        self.temporal_pos = nn.Parameter(
+            torch.zeros(1, data_cfg.num_frames, model_cfg.embed_dim)
+        )
+        self.norm = nn.LayerNorm(model_cfg.embed_dim)
+
+    def forward(self, skeleton: torch.Tensor) -> torch.Tensor:
+        batch, frames, joints, coords = skeleton.shape
+        skeleton = skeleton.reshape(batch * frames, joints, coords).transpose(1, 2)
+        features = self.conv(skeleton).mean(dim=-1)
+        features = features.reshape(batch, frames, -1)
+        features = features + self.temporal_pos[:, :frames]
+        return self.norm(features)
+
+
 class DualStreamSpAGaitFormer(nn.Module):
     def __init__(
         self,
@@ -124,13 +176,19 @@ class DualStreamSpAGaitFormer(nn.Module):
         task_cfg: TaskConfig,
     ) -> None:
         super().__init__()
+        if model_cfg.model_type not in {"transformer", "cnn"}:
+            raise ValueError("model.model_type must be 'transformer' or 'cnn'.")
         if model_cfg.input_mode not in {"fusion", "rgb", "skeleton"}:
             raise ValueError("model.input_mode must be one of fusion/rgb/skeleton.")
 
         self.task_cfg = task_cfg
         self.input_mode = model_cfg.input_mode
-        self.rgb_encoder = RGBEncoder(data_cfg, model_cfg)
-        self.skeleton_encoder = SkeletonEncoder(data_cfg, model_cfg)
+        if model_cfg.model_type == "cnn":
+            self.rgb_encoder = RGBCNNEncoder(data_cfg, model_cfg)
+            self.skeleton_encoder = SkeletonCNNEncoder(data_cfg, model_cfg)
+        else:
+            self.rgb_encoder = RGBEncoder(data_cfg, model_cfg)
+            self.skeleton_encoder = SkeletonEncoder(data_cfg, model_cfg)
 
         max_tokens = 1 + (2 * data_cfg.num_frames)
         self.cls_token = nn.Parameter(torch.zeros(1, 1, model_cfg.embed_dim))

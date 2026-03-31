@@ -55,6 +55,7 @@ class DataConfig:
 
 @dataclass
 class ModelConfig:
+    model_type: str = "transformer"
     input_mode: str = "fusion"
     embed_dim: int = 256
     rgb_patch_size: int = 16
