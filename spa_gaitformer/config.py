@@ -11,6 +11,9 @@ _DATA_PATH_FIELDS = {
     "train_manifest",
     "val_manifest",
     "test_manifest",
+    "train_window_manifest",
+    "val_window_manifest",
+    "test_window_manifest",
     "train_split",
     "val_split",
     "test_split",
@@ -23,6 +26,9 @@ class DataConfig:
     train_manifest: str | None = None
     val_manifest: str | None = None
     test_manifest: str | None = None
+    train_window_manifest: str | None = None
+    val_window_manifest: str | None = None
+    test_window_manifest: str | None = None
     train_split: str | None = None
     val_split: str | None = None
     test_split: str | None = None

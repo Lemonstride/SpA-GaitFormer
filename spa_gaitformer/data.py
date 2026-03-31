@@ -25,12 +25,18 @@ class SampleRecord:
     skeleton_path: str
     disease_label: int
     severity_label: float
+    window_start: int | None = None
+    window_end: int | None = None
 
 
 def load_records_for_split(
     split: str,
     data_config: DataConfig,
 ) -> list[SampleRecord]:
+    window_manifest_path = getattr(data_config, f"{split}_window_manifest", None)
+    if window_manifest_path:
+        return read_window_manifest(window_manifest_path, data_config)
+
     manifest_path = getattr(data_config, f"{split}_manifest", None)
     if manifest_path:
         return read_manifest(manifest_path)
@@ -162,6 +168,52 @@ def read_manifest(path: str | Path) -> list[SampleRecord]:
                     severity_label=parse_severity_label(severity_raw),
                 )
             )
+    return records
+
+
+def read_window_manifest(path: str | Path, data_config: DataConfig) -> list[SampleRecord]:
+    records: list[SampleRecord] = []
+    base_root = Path(data_config.dataset_root) if data_config.dataset_root else None
+    with Path(path).open("r", encoding="utf-8") as handle:
+        reader = csv.DictReader(handle)
+        required = {"subject_id", "session", "start_frame", "end_frame"}
+        missing = required.difference(reader.fieldnames or [])
+        if missing:
+            missing_columns = ", ".join(sorted(missing))
+            raise ValueError(
+                f"Window manifest {path} is missing columns: {missing_columns}"
+            )
+
+        for row in reader:
+            subject_id = row["subject_id"].strip()
+            session = row["session"].strip()
+            session_dir = (
+                base_root / subject_id / session if base_root else Path(row.get("session_dir", ""))
+            )
+            if not session_dir:
+                raise ValueError("dataset_root is required for window manifests.")
+            rgb_path = session_dir / data_config.rgb_dir
+            skeleton_path = session_dir / data_config.skeleton_file
+            disease_label, severity_label = _read_session_labels(session_dir, data_config)
+            start_frame = int(float(row["start_frame"]))
+            end_frame = int(float(row["end_frame"]))
+            sample_id = f"{subject_id}/{session}/{start_frame}-{end_frame}"
+            records.append(
+                SampleRecord(
+                    sample_id=sample_id,
+                    subject_id=subject_id,
+                    session=session,
+                    session_dir=str(session_dir),
+                    rgb_path=str(rgb_path),
+                    skeleton_path=str(skeleton_path),
+                    disease_label=disease_label,
+                    severity_label=severity_label,
+                    window_start=start_frame,
+                    window_end=end_frame,
+                )
+            )
+    if not records:
+        raise ValueError("Window manifest produced no samples.")
     return records
 
 
@@ -401,7 +453,13 @@ def _load_optional_numpy() -> Any:
     return np
 
 
-def load_rgb_sequence(path: str | Path, num_frames: int, image_size: int) -> torch.Tensor:
+def load_rgb_sequence(
+    path: str | Path,
+    num_frames: int,
+    image_size: int,
+    window_start: int | None = None,
+    window_end: int | None = None,
+) -> torch.Tensor:
     rgb_path = Path(path)
     if rgb_path.is_dir():
         try:
@@ -417,6 +475,8 @@ def load_rgb_sequence(path: str | Path, num_frames: int, image_size: int) -> tor
             for candidate in rgb_path.iterdir()
             if candidate.suffix.lower() in {".png", ".jpg", ".jpeg", ".bmp"}
         )
+        if window_start is not None and window_end is not None:
+            frame_paths = frame_paths[window_start : window_end + 1]
         if not frame_paths:
             raise ValueError(f"No image frames found in {rgb_path}.")
         indices = _uniform_frame_indices(len(frame_paths), num_frames)
@@ -468,6 +528,8 @@ def load_skeleton_sequence(
     max_joints: int,
     joint_dim: int,
     normalize: bool,
+    window_start: int | None = None,
+    window_end: int | None = None,
 ) -> torch.Tensor:
     skeleton_path = Path(path)
     if skeleton_path.suffix.lower() in {".pt", ".pth"}:
@@ -484,6 +546,8 @@ def load_skeleton_sequence(
         )
 
     skeleton = _to_temporal_joints(torch.as_tensor(skeleton), joint_dim)
+    if window_start is not None and window_end is not None:
+        skeleton = skeleton[window_start : window_end + 1]
     frame_indices = _uniform_frame_indices(skeleton.shape[0], num_frames)
     skeleton = skeleton.index_select(0, frame_indices)
 
@@ -532,6 +596,8 @@ class SpAMMDDataset(Dataset[dict[str, torch.Tensor]]):
             record.rgb_path,
             num_frames=self.data_config.num_frames,
             image_size=self.data_config.image_size,
+            window_start=record.window_start,
+            window_end=record.window_end,
         )
         skeleton = load_skeleton_sequence(
             record.skeleton_path,
@@ -539,6 +605,8 @@ class SpAMMDDataset(Dataset[dict[str, torch.Tensor]]):
             max_joints=self.data_config.max_joints,
             joint_dim=self.data_config.joint_dim,
             normalize=self.data_config.normalize_skeleton,
+            window_start=record.window_start,
+            window_end=record.window_end,
         )
 
         rgb_mean = torch.tensor(self.data_config.rgb_mean).view(1, 3, 1, 1)

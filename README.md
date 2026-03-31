@@ -163,6 +163,29 @@ python scripts/train_baseline_classifier.py \
   --model svm
 ```
 
+### Windowed Training (Optional)
+
+Generate window manifests (no leakage, subject-level):
+
+```bash
+python scripts/build_window_manifest.py \
+  --processed_root F:/SpA-MMD/processed \
+  --split_file F:/SpA-MMD/splits/train_subjects.txt \
+  --sessions walk,head_turn \
+  --window 32 \
+  --stride 16 \
+  --output_csv D:/projects/SpA-GaitFormer/windows/train_windows.csv
+```
+
+Then set `data.train_window_manifest` (and optionally test/val) in the config:
+
+```json
+"train_window_manifest": "D:/projects/SpA-GaitFormer/windows/train_windows.csv"
+```
+
+When window manifests are provided, the loader will slice RGB and skeleton sequences
+by `start_frame/end_frame` before sampling to `data.num_frames`.
+
 ### Outputs
 
 Cross-validation outputs are written under:
@@ -345,6 +368,29 @@ python scripts/train_baseline_classifier.py \
   --task severity \
   --model svm
 ```
+
+### 滑窗训练（可选）
+
+生成滑窗清单（保持受试者隔离）：
+
+```bash
+python scripts/build_window_manifest.py \
+  --processed_root F:/SpA-MMD/processed \
+  --split_file F:/SpA-MMD/splits/train_subjects.txt \
+  --sessions walk,head_turn \
+  --window 32 \
+  --stride 16 \
+  --output_csv D:/projects/SpA-GaitFormer/windows/train_windows.csv
+```
+
+然后在配置里设置 `data.train_window_manifest`（可选再设 test/val）：
+
+```json
+"train_window_manifest": "D:/projects/SpA-GaitFormer/windows/train_windows.csv"
+```
+
+当提供 window manifest 时，数据加载器会先按 `start_frame/end_frame` 切片，
+再采样到 `data.num_frames`。
 
 ### 输出目录
 
