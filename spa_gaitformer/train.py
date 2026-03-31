@@ -267,7 +267,14 @@ def _train_with_validation(
             f"disease_pos_rate={val_logs['disease_pos_rate']:.3f} "
             f"disease_prob_mean={val_logs['disease_prob_mean']:.3f} "
             f"disease_f1_best={val_logs['disease_f1_best']:.4f} "
-            f"disease_best_threshold={val_logs['disease_best_threshold']:.2f}"
+            f"disease_best_threshold={val_logs['disease_best_threshold']:.2f} "
+            f"val_pos={int(val_logs['disease_pos_count'])} "
+            f"val_neg={int(val_logs['disease_neg_count'])} "
+            f"pred_pos_ratio={val_logs['disease_pos_rate']:.3f} "
+            f"logit_mean={val_logs['disease_logit_mean']:.3f} "
+            f"logit_var={val_logs['disease_logit_var']:.3f} "
+            f"confusion=[[{int(val_logs['disease_tn'])},{int(val_logs['disease_fp'])}],"
+            f"[{int(val_logs['disease_fn'])},{int(val_logs['disease_tp'])}]]"
         )
 
         candidate = float(val_logs[selection_metric])

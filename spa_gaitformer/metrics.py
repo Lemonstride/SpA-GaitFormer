@@ -19,8 +19,12 @@ class MetricTracker:
         self.disease_prob_sum = 0.0
         self.disease_pred_sum = 0.0
         self.disease_count = 0.0
+        self.disease_logit_sum = 0.0
+        self.disease_logit_sq_sum = 0.0
         self.disease_probs: list[float] = []
         self.disease_targets: list[float] = []
+        self.disease_pos_target = 0.0
+        self.disease_neg_target = 0.0
         self.severity_correct = 0.0
         self.severity_abs_error = 0.0
         self.severity_total = 0.0
@@ -45,7 +49,8 @@ class MetricTracker:
         self.severity_loss_sum += loss_logs["severity_loss"]
 
         disease_target = batch["disease_label"].float()
-        disease_prob = torch.sigmoid(outputs["disease_logits"].detach().cpu())
+        disease_logits = outputs["disease_logits"].detach().cpu()
+        disease_prob = torch.sigmoid(disease_logits)
         disease_pred = (disease_prob >= 0.5).float()
         self.tp += float(((disease_pred == 1) & (disease_target == 1)).sum())
         self.tn += float(((disease_pred == 0) & (disease_target == 0)).sum())
@@ -54,6 +59,10 @@ class MetricTracker:
         self.disease_prob_sum += float(disease_prob.sum())
         self.disease_pred_sum += float(disease_pred.sum())
         self.disease_count += float(disease_pred.numel())
+        self.disease_logit_sum += float(disease_logits.sum())
+        self.disease_logit_sq_sum += float((disease_logits ** 2).sum())
+        self.disease_pos_target += float((disease_target == 1).sum())
+        self.disease_neg_target += float((disease_target == 0).sum())
         self.disease_probs.extend(disease_prob.flatten().tolist())
         self.disease_targets.extend(disease_target.flatten().tolist())
 
@@ -101,6 +110,10 @@ class MetricTracker:
             2.0 * disease_precision * disease_recall
             / max(disease_precision + disease_recall, 1e-8)
         )
+        logit_mean = self.disease_logit_sum / max(self.disease_count, 1.0)
+        logit_var = (
+            self.disease_logit_sq_sum / max(self.disease_count, 1.0) - logit_mean**2
+        )
         metrics = {
             "loss": self.loss_sum / max(self.batch_count, 1),
             "disease_loss": self.disease_loss_sum / max(self.batch_count, 1),
@@ -111,6 +124,14 @@ class MetricTracker:
             "disease_f1": disease_f1,
             "disease_pos_rate": self.disease_pred_sum / max(self.disease_count, 1.0),
             "disease_prob_mean": self.disease_prob_sum / max(self.disease_count, 1.0),
+            "disease_logit_mean": logit_mean,
+            "disease_logit_var": max(logit_var, 0.0),
+            "disease_pos_count": self.disease_pos_target,
+            "disease_neg_count": self.disease_neg_target,
+            "disease_tp": self.tp,
+            "disease_fp": self.fp,
+            "disease_tn": self.tn,
+            "disease_fn": self.fn,
         }
         best_f1, best_threshold = self._best_disease_f1()
         metrics["disease_f1_best"] = best_f1
