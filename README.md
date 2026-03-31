@@ -130,6 +130,39 @@ Evaluate on the fixed test set:
 python main.py --config configs/spa_mmd_dual_stream.json --mode evaluate --split test
 ```
 
+### Feature Baseline (Recommended for Small Samples)
+
+Extract hand-crafted features from skeleton + head-turn summary:
+
+```bash
+python scripts/extract_spa_mmd_features.py \
+  --dataset_root F:/SpA-MMD/processed \
+  --sessions walk,head_turn \
+  --output_csv D:/projects/SpA-GaitFormer/baselines/spa_mmd_features.csv
+```
+
+Train a baseline classifier (binary disease task):
+
+```bash
+python scripts/train_baseline_classifier.py \
+  --features_csv D:/projects/SpA-GaitFormer/baselines/spa_mmd_features.csv \
+  --train_split F:/SpA-MMD/splits/train_subjects.txt \
+  --test_split F:/SpA-MMD/splits/test_subjects.txt \
+  --task disease \
+  --model logreg
+```
+
+For severity prediction:
+
+```bash
+python scripts/train_baseline_classifier.py \
+  --features_csv D:/projects/SpA-GaitFormer/baselines/spa_mmd_features.csv \
+  --train_split F:/SpA-MMD/splits/train_subjects.txt \
+  --test_split F:/SpA-MMD/splits/test_subjects.txt \
+  --task severity \
+  --model svm
+```
+
 ### Outputs
 
 Cross-validation outputs are written under:
@@ -278,6 +311,39 @@ python main.py --config configs/spa_mmd_dual_stream.json --mode train_final
 
 ```bash
 python main.py --config configs/spa_mmd_dual_stream.json --mode evaluate --split test
+```
+
+### 特征基线（推荐用于小样本）
+
+从 skeleton + head_turn summary 提取特征：
+
+```bash
+python scripts/extract_spa_mmd_features.py \
+  --dataset_root F:/SpA-MMD/processed \
+  --sessions walk,head_turn \
+  --output_csv D:/projects/SpA-GaitFormer/baselines/spa_mmd_features.csv
+```
+
+训练传统基线分类器（二分类任务）：
+
+```bash
+python scripts/train_baseline_classifier.py \
+  --features_csv D:/projects/SpA-GaitFormer/baselines/spa_mmd_features.csv \
+  --train_split F:/SpA-MMD/splits/train_subjects.txt \
+  --test_split F:/SpA-MMD/splits/test_subjects.txt \
+  --task disease \
+  --model logreg
+```
+
+严重程度分级：
+
+```bash
+python scripts/train_baseline_classifier.py \
+  --features_csv D:/projects/SpA-GaitFormer/baselines/spa_mmd_features.csv \
+  --train_split F:/SpA-MMD/splits/train_subjects.txt \
+  --test_split F:/SpA-MMD/splits/test_subjects.txt \
+  --task severity \
+  --model svm
 ```
 
 ### 输出目录
