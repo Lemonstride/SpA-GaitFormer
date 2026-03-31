@@ -126,6 +126,19 @@ def _extract_features_from_kpt3d(
     pose_centered = coords - root[:, None, :]
     pose_spread = np.linalg.norm(pose_centered, axis=-1)
 
+    root_speed_median = float(np.median(root_speed)) if root_speed.size else 0.0
+    root_speed_iqr = (
+        float(np.percentile(root_speed, 75) - np.percentile(root_speed, 25))
+        if root_speed.size
+        else 0.0
+    )
+
+    accel = np.diff(root_speed) if root_speed.size > 1 else np.asarray([])
+    accel_mean = _safe_mean(accel)
+    accel_std = _safe_std(accel)
+
+    step_count, step_interval_mean, step_interval_std = _estimate_step_stats(root_speed)
+
     features = {
         "root_speed_mean": _safe_mean(root_speed),
         "root_speed_std": _safe_std(root_speed),
@@ -136,6 +149,13 @@ def _extract_features_from_kpt3d(
         "joint_speed_std": _safe_std(joint_speed),
         "pose_spread_mean": _safe_mean(pose_spread),
         "pose_spread_std": _safe_std(pose_spread),
+        "root_speed_median": root_speed_median,
+        "root_speed_iqr": root_speed_iqr,
+        "root_accel_mean": accel_mean,
+        "root_accel_std": accel_std,
+        "step_count": float(step_count),
+        "step_interval_mean": step_interval_mean,
+        "step_interval_std": step_interval_std,
         "confidence_mean": _safe_mean(conf) if conf is not None else 0.0,
     }
 
@@ -161,6 +181,24 @@ def _extract_features_from_kpt3d(
         features["symmetry_xdiff_mean"] = 0.0
 
     return features
+
+
+def _estimate_step_stats(root_speed: np.ndarray) -> tuple[int, float, float]:
+    if root_speed.size < 3:
+        return 0, 0.0, 0.0
+    threshold = 0.5 * float(root_speed.max())
+    peaks = []
+    for index in range(1, root_speed.size - 1):
+        if (
+            root_speed[index] > threshold
+            and root_speed[index] >= root_speed[index - 1]
+            and root_speed[index] >= root_speed[index + 1]
+        ):
+            peaks.append(index)
+    if len(peaks) < 2:
+        return len(peaks), 0.0, 0.0
+    intervals = np.diff(peaks).astype(np.float32)
+    return len(peaks), float(intervals.mean()), float(intervals.std())
 
 
 def _extract_head_turn_features(session_dir: Path) -> dict[str, float]:
