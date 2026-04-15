@@ -482,4 +482,35 @@ def _default_eval_checkpoint(config: ExperimentConfig) -> Path:
     final_checkpoint = Path(config.train.checkpoint_dir) / "final" / "final.pt"
     if final_checkpoint.exists():
         return final_checkpoint
+
+    cv_summary_path = Path(config.train.checkpoint_dir) / "cv" / "summary.json"
+    if cv_summary_path.exists():
+        summary = json.loads(cv_summary_path.read_text(encoding="utf-8"))
+        folds = summary.get("folds", [])
+        if isinstance(folds, list) and folds:
+            selection_metric = str(summary.get("selection_metric", "loss"))
+            reverse = _selection_metric_direction(selection_metric) == "max"
+            sorted_folds = sorted(
+                folds,
+                key=lambda item: float(item.get("best_metric", 0.0)),
+                reverse=reverse,
+            )
+            for fold in sorted_folds:
+                fold_id = fold.get("fold")
+                if fold_id is None:
+                    continue
+                candidate = (
+                    Path(config.train.checkpoint_dir)
+                    / "cv"
+                    / f"fold_{int(fold_id)}"
+                    / "best.pt"
+                )
+                if candidate.exists():
+                    return candidate
+
+        for fold_dir in sorted((Path(config.train.checkpoint_dir) / "cv").glob("fold_*")):
+            candidate = fold_dir / "best.pt"
+            if candidate.exists():
+                return candidate
+
     return Path(config.train.checkpoint_dir) / "best.pt"

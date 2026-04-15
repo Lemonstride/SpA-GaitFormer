@@ -94,6 +94,13 @@ def _split_rows(rows: list[dict[str, str]], train_subjects: set[str], test_subje
 def _build_matrix(rows: list[dict[str, str]], task: str):
     ignore_keys = {"subject_id", "session", "disease_label", "severity_label"}
     feature_keys = [key for key in rows[0].keys() if key not in ignore_keys]
+    if task == "severity":
+        rows = [row for row in rows if int(row["severity_label"]) >= 0]
+        if not rows:
+            raise SystemExit(
+                "No valid severity samples after filtering unknown labels (severity_label < 0)."
+            )
+
     x = np.asarray([[float(row[key]) for key in feature_keys] for row in rows])
     if task == "disease":
         y = np.asarray([int(row["disease_label"]) for row in rows])

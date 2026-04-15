@@ -69,6 +69,10 @@ def count_frames(rgb_dir: Path) -> int:
 
 def main() -> None:
     args = parse_args()
+    if args.window <= 0:
+        raise SystemExit("--window must be > 0.")
+    if args.stride <= 0:
+        raise SystemExit("--stride must be > 0.")
     sessions = [s.strip() for s in args.sessions.split(",") if s.strip()]
     subjects = read_split(args.split_file)
     rows: list[dict[str, int | str]] = []
