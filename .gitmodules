@@ -1,0 +1,3 @@
+[submodule "third_party/OpenGait"]
+	path = third_party/OpenGait
+	url = https://github.com/ShiqiYu/OpenGait.git
