@@ -50,7 +50,7 @@ configs/                 formal and smoke-test configurations
 scripts/                 preprocessing and SkeletonGait++ extraction helpers
 spa_gaitformer/          model, data, training, metrics, and CLI code
 tests/                   unit and tensor-interface tests
-third_party/OpenGait/    pinned official OpenGait pinned Git submodule
+third_party/OpenGait/    pinned official OpenGait Git submodule
 ```
 
 ## Install
