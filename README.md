@@ -1,6 +1,6 @@
-# SpA-Gaitformer
+# SpA-GaitFormer
 
-SpA-Gaitformer is the local, uploadable reproduction project for the SpA-MMD
+SpA-GaitFormer is the reproducible implementation for the SpA-MMD
 paper. It implements the paper's RGB ViT, SkeletonGait++ feature adapter,
 mmWave range-Doppler (RD) temporal Transformer, strict frame-feature-level 3:1
 alignment, cross-modal Transformer, supervised cross-entropy training, and
@@ -50,18 +50,19 @@ third_party/OpenGait/    pinned official OpenGait source snapshot
 
 ## Install
 
-On AML, dependencies must come from the company package index:
+Clone the repository together with its pinned OpenGait dependency:
 
 ```bash
-/vepfs/group02/USER/fanzu/env/spa-mmd/bin/python -m pip install \
-  --index-url https://pkg.geely.com/artifactory/api/pypi/pypi/simple \
-  -e /vepfs/group02/USER/fanzu/codes/SpA-Gaitformer
+git clone --recurse-submodules https://github.com/Lemonstride/SpA-GaitFormer.git
+cd SpA-GaitFormer
+python -m pip install -e '.[dev,opengait]'
 ```
 
-The local directory is the source of truth for later GitHub upload:
+For an existing checkout, initialize or refresh the submodule with:
 
-```text
-D:\VSCodeProject\codes\SpA-Gaitformer
+```bash
+git pull
+git submodule update --init --recursive
 ```
 
 ## Data contract
@@ -80,7 +81,7 @@ Generate a window manifest only after RD and skeleton features exist:
 
 ```bash
 spa-build-manifest \
-  --processed-root /vepfs/group02/USER/fanzu/datasets/SpA-MMD-processed \
+  --processed-root /path/to/SpA-MMD-processed \
   --labels-csv /path/to/clinical_labels.csv \
   --rd-root /path/to/rd_maps \
   --skeleton-root /path/to/skeleton_frame_features \
@@ -121,8 +122,8 @@ For interface validation without paper assets, use `configs/smoke.yaml` and
 
 ## Third-party provenance
 
-`third_party/OpenGait` is a source snapshot from the official OpenGait project,
-pinned in `THIRD_PARTY.md`. It is kept locally because AML has no public network
-access. SkeletonGait++ is used as a convolutional/P3D front-end whose extracted
-frame features are projected into SpA-Gaitformer's Transformer token space; it
-is not described as a Transformer itself.
+`third_party/OpenGait` is a Git submodule pointing to a pinned commit from the
+official OpenGait project; provenance is recorded in `THIRD_PARTY.md`.
+SkeletonGait++ is used as a convolutional/P3D front-end whose extracted frame
+features are projected into SpA-GaitFormer's Transformer token space; it is not
+described as a Transformer itself.

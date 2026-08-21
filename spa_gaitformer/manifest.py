@@ -76,14 +76,15 @@ def build_manifest(
                 raise ValueError(
                     f"RGB/skeleton frame mismatch for {subject}/{session}: {rgb_steps} != {skeleton_steps}"
                 )
-            synchronized_rd_steps = min(rd_steps, rgb_steps // 3)
-            if rgb_steps < rd_steps * 3:
+            expected_rgb_steps = rd_steps * 3
+            if rgb_steps != expected_rgb_steps:
                 raise ValueError(
-                    f"Not enough RGB/skeleton frames for exact 3:1 alignment in {subject}/{session}: "
-                    f"RGB={rgb_steps}, RD={rd_steps}"
+                    f"Exact 3:1 frame-feature alignment failed for {subject}/{session}: "
+                    f"expected RGB/skeleton={expected_rgb_steps} for RD={rd_steps}, "
+                    f"got RGB/skeleton={rgb_steps}"
                 )
 
-            for window_id in range(count_windows(synchronized_rd_steps, rd_window, rd_stride)):
+            for window_id in range(count_windows(rd_steps, rd_window, rd_stride)):
                 rd_start = window_id * rd_stride
                 rd_end = rd_start + rd_window
                 rgb_start = rd_start * 3

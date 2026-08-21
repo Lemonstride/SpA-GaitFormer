@@ -11,7 +11,7 @@ import torch
 from torch import nn
 
 
-def build_model(opengait_root: Path, checkpoint: Path) -> nn.Module:
+def load_model_class(opengait_root: Path):
     opengait_package = opengait_root / "opengait"
     sys.path.insert(0, str(opengait_package))
     import modeling.base_model  # noqa: F401
@@ -26,7 +26,12 @@ def build_model(opengait_root: Path, checkpoint: Path) -> nn.Module:
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
-    model = module.SkeletonGaitPP.__new__(module.SkeletonGaitPP)
+    return module.SkeletonGaitPP
+
+
+def build_model(opengait_root: Path, checkpoint: Path) -> nn.Module:
+    model_class = load_model_class(opengait_root)
+    model = model_class.__new__(model_class)
     nn.Module.__init__(model)
     model.build_network(
         {
