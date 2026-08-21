@@ -1,2 +1,0 @@
-# Unused in the default small-sample workflow.
-# Use train_subjects.txt for 2-fold cross-validation and test_subjects.txt for the fixed test set.
