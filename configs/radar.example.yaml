@@ -1,0 +1,18 @@
+# Fill every field from the acquisition configuration. These values are not
+# inferred from adc_data_Raw_0.bin and examples are intentionally omitted.
+num_adc_samples: null
+chirps_per_frame: null
+num_rx: null
+num_tx: null
+num_frames: null
+adc_bits: null
+sample_rate_ksps: null
+frequency_slope_mhz_us: null
+frame_period_ms: null
+iq_order: null
+lane_interleave: null
+range_fft_size: null
+doppler_fft_size: null
+window: hann
+remove_static_clutter: true
+
