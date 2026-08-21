@@ -1,4 +1,4 @@
-Copyright (c) 2026 [Copyright Holder]
+Copyright (c) 2026 [Dalian University of technology]
 All rights reserved.
 
 This source code is made publicly available solely for inspection,
