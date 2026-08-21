@@ -1,0 +1,49 @@
+seed: 2026
+task: binary
+
+data:
+  image_size: 224
+  ratio_rgb_to_rd: 3
+  rd_window: null
+  rd_stride: null
+  num_workers: 4
+
+model:
+  num_classes:
+    binary: 2
+    severity: 4
+  shared_dim: 256
+  dropout: 0.1
+  rgb:
+    backend: vit_b_16
+    checkpoint: null
+    trainable: true
+  skeleton:
+    feature_dim: 4096
+    checkpoint: null
+    trainable: true
+  radar:
+    cnn_channels: 64
+    transformer_layers: 2
+    transformer_heads: 8
+  fusion:
+    layers: 3
+    heads: 8
+    mlp_ratio: 4
+
+training:
+  optimizer: adam
+  learning_rate: 0.0001
+  weight_decay: 0.0
+  batch_size: 16
+  epochs: 50
+  loss: cross_entropy
+  class_weights: null
+  primary_metric: macro_f1
+
+evaluation:
+  repeats: 5
+  train_ratio: null
+  val_ratio: null
+  subject_independent: true
+
