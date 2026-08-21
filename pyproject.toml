@@ -19,13 +19,14 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=7.4"]
-opengait = ["einops>=0.6", "opencv-python>=4.8", "tqdm>=4.65"]
+opengait = ["einops>=0.6", "matplotlib>=3.7", "opencv-python>=4.8", "tensorboard>=2.14", "tqdm>=4.65"]
 
 [project.scripts]
 spa-build-manifest = "spa_gaitformer.manifest:main"
 spa-make-splits = "spa_gaitformer.splits:main"
 spa-train = "spa_gaitformer.train:main"
 spa-evaluate = "spa_gaitformer.evaluate:main"
+spa-radar-to-rd = "spa_gaitformer.radar:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
