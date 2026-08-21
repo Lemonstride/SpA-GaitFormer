@@ -6,6 +6,11 @@ mmWave range-Doppler (RD) temporal Transformer, strict frame-feature-level 3:1
 alignment, cross-modal Transformer, supervised cross-entropy training, and
 subject-independent evaluation.
 
+## License Attention
+Source available for inspection, academic reference, and citation only.
+No permission is granted to run, reuse, modify, or redistribute this code.
+See LICENSE.md.
+
 ## Reproduction status
 
 The following parts are implemented and testable:
