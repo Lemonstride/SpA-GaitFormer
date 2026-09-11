@@ -43,6 +43,7 @@ class SpAWindowDataset(Dataset[dict[str, torch.Tensor | str]]):
         image_size: int,
         augmentation: dict[str, Any] | None = None,
         rd_normalization: str = "none",
+        headturn_enabled: bool = False,
     ) -> None:
         self.manifest = Path(manifest).expanduser().resolve()
         with self.manifest.open(newline="", encoding="utf-8-sig") as handle:
@@ -57,10 +58,36 @@ class SpAWindowDataset(Dataset[dict[str, torch.Tensor | str]]):
         self.std = torch.tensor([0.229, 0.224, 0.225])[:, None, None]
         self.augmentation = augmentation if augmentation and augmentation.get("enabled", True) else None
         self.rd_normalization = rd_normalization
+        self.headturn_enabled = bool(headturn_enabled)
+        self.headturn_mean = 0.0
+        self.headturn_std = 1.0
+        if self.headturn_enabled:
+            self.headturn_values_by_subject()
         self.epoch = 0
 
     def set_epoch(self, epoch: int) -> None:
         self.epoch = int(epoch)
+
+    def headturn_values_by_subject(self) -> dict[str, float]:
+        values: dict[str, float] = {}
+        for row in self.rows:
+            subject = row["subject_id"]
+            raw_value = row.get("headturn_span_deg", "").strip()
+            if not raw_value:
+                raise ValueError(f"Missing headturn_span_deg for {subject} in {self.manifest}")
+            value = float(raw_value)
+            if not math.isfinite(value):
+                raise ValueError(f"Non-finite headturn_span_deg for {subject}: {raw_value}")
+            if subject in values and not math.isclose(values[subject], value, abs_tol=1e-6):
+                raise ValueError(f"Inconsistent headturn_span_deg values for {subject}")
+            values[subject] = value
+        return values
+
+    def set_headturn_normalization(self, mean: float, std: float) -> None:
+        if not math.isfinite(mean) or not math.isfinite(std) or std <= 0.0:
+            raise ValueError("Head-turn normalization requires a finite mean and positive std")
+        self.headturn_mean = float(mean)
+        self.headturn_std = float(std)
 
     def __len__(self) -> int:
         return len(self.rows)
@@ -298,7 +325,7 @@ class SpAWindowDataset(Dataset[dict[str, torch.Tensor | str]]):
         rgb_tensor, skeleton_tensor, rd_tensor = self._apply_shared_temporal_mask(
             rgb_tensor, skeleton_tensor, rd_tensor
         )
-        return {
+        sample: dict[str, torch.Tensor | str] = {
             "rgb": rgb_tensor,
             "skeleton_features": skeleton_tensor,
             "rd_maps": rd_tensor,
@@ -307,3 +334,8 @@ class SpAWindowDataset(Dataset[dict[str, torch.Tensor | str]]):
             "session": row["session"],
             "augmentation_view": str(rgb_parameters.get("view", "original")),
         }
+        if self.headturn_enabled:
+            value = (float(row["headturn_span_deg"]) - self.headturn_mean) / self.headturn_std
+            sample["headturn"] = torch.tensor([value], dtype=torch.float32)
+        return sample
+

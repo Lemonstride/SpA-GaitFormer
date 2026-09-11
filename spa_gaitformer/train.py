@@ -53,19 +53,37 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
 
     data_cfg = config["data"]
+    headturn_enabled = bool(config["model"].get("headturn", {}).get("enabled", False))
     train_set = SpAWindowDataset(
         args.train_manifest,
         args.task,
         int(data_cfg["image_size"]),
         augmentation=data_cfg.get("augmentation"),
         rd_normalization=data_cfg.get("rd_normalization", "none"),
+        headturn_enabled=headturn_enabled,
     )
     val_set = SpAWindowDataset(
         args.val_manifest,
         args.task,
         int(data_cfg["image_size"]),
         rd_normalization=data_cfg.get("rd_normalization", "none"),
+        headturn_enabled=headturn_enabled,
     )
+    headturn_normalization = None
+    if headturn_enabled:
+        values = np.asarray(list(train_set.headturn_values_by_subject().values()), dtype=np.float64)
+        mean = float(values.mean())
+        std = float(values.std())
+        if not np.isfinite(std) or std <= 1e-6:
+            raise ValueError("Training subjects do not provide variable head-turn spans")
+        train_set.set_headturn_normalization(mean, std)
+        val_set.set_headturn_normalization(mean, std)
+        headturn_normalization = {
+            "mean_deg": mean,
+            "std_deg": std,
+            "fit_unit": "unique_training_subject",
+            "subject_count": int(values.size),
+        }
     training_cfg = config["training"]
     loader_args = {
         "batch_size": int(training_cfg["batch_size"]),
@@ -125,6 +143,7 @@ def main() -> None:
                 "gradient_accumulation_steps": accumulation_steps,
                 "effective_batch_size": int(training_cfg["batch_size"]) * accumulation_steps,
                 "sampling": sampling,
+                "headturn_normalization": headturn_normalization,
             },
             indent=2,
             ensure_ascii=False,
@@ -170,6 +189,7 @@ def main() -> None:
                     "epoch": epoch,
                     "val_metrics": val_metrics,
                     "primary_metric": primary_metric,
+                    "headturn_normalization": headturn_normalization,
                 },
                 output_dir / "best.pt",
             )
@@ -180,3 +200,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

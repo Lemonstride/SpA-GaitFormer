@@ -25,3 +25,11 @@ def test_invalid_augmentation_probability_is_rejected() -> None:
     config["data"]["augmentation"]["skeleton"]["feature_dropout_p"] = 1.0
     with pytest.raises(ValueError, match="feature_dropout_p"):
         validate_config(config)
+
+
+def test_headturn_enabled_must_be_boolean() -> None:
+    config = deepcopy(load_config(ROOT / "configs" / "smoke.yaml"))
+    config["model"]["headturn"] = {"enabled": "yes"}
+    with pytest.raises(ValueError, match="headturn.enabled"):
+        validate_config(config)
+

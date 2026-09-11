@@ -244,7 +244,20 @@ class SpAGaitformer(nn.Module):
         self.skeleton_branch = SkeletonFeatureBranch(cfg["skeleton"], shared_dim)
         self.radar_branch = RadarTemporalBranch(cfg["radar"], shared_dim, dropout)
 
-        self.modality_embedding = nn.Parameter(torch.empty(3, shared_dim))
+        self.headturn_enabled = bool(cfg.get("headturn", {}).get("enabled", False))
+        self.headturn_branch = (
+            nn.Sequential(
+                nn.Linear(1, shared_dim),
+                nn.GELU(),
+                nn.Linear(shared_dim, shared_dim),
+            )
+            if self.headturn_enabled
+            else None
+        )
+
+        self.modality_embedding = nn.Parameter(
+            torch.empty(4 if self.headturn_enabled else 3, shared_dim)
+        )
         self.cls_token = nn.Parameter(torch.empty(1, 1, shared_dim))
         self.time_projection = nn.Sequential(
             nn.Linear(1, shared_dim),
@@ -282,6 +295,7 @@ class SpAGaitformer(nn.Module):
         skeleton_features: torch.Tensor,
         rd_maps: torch.Tensor,
         modality_mask: torch.Tensor | None = None,
+        headturn: torch.Tensor | None = None,
     ) -> dict[str, torch.Tensor]:
         validate_three_to_one_lengths(rgb.size(1), skeleton_features.size(1), rd_maps.size(1))
         rgb_tokens = self.rgb_branch(rgb)
@@ -292,7 +306,11 @@ class SpAGaitformer(nn.Module):
         batch, time_steps, modality_count, dim = modalities.shape
         time = torch.linspace(0.0, 1.0, time_steps, device=modalities.device, dtype=modalities.dtype)
         time_embedding = self.time_projection(time[:, None]).view(1, time_steps, 1, dim)
-        modalities = modalities + self.modality_embedding.view(1, 1, modality_count, dim) + time_embedding
+        modalities = (
+            modalities
+            + self.modality_embedding[:modality_count].view(1, 1, modality_count, dim)
+            + time_embedding
+        )
 
         if modality_mask is not None:
             if modality_mask.shape != (batch, modality_count):
@@ -302,13 +320,28 @@ class SpAGaitformer(nn.Module):
             modalities = modalities * modality_mask[:, None, :, None].to(modalities.dtype)
 
         tokens = modalities.reshape(batch, time_steps * modality_count, dim)
+        headturn_token = None
+        if self.headturn_enabled:
+            if headturn is None or headturn.shape != (batch, 1):
+                shape = None if headturn is None else tuple(headturn.shape)
+                raise ValueError(f"Enabled head-turn input must be [B,1], got {shape}")
+            assert self.headturn_branch is not None
+            headturn_token = self.headturn_branch(headturn)
+            headturn_token = headturn_token + self.modality_embedding[3]
+            tokens = torch.cat([tokens, headturn_token[:, None, :]], dim=1)
+        elif headturn is not None:
+            raise ValueError("Head-turn input was provided while model.headturn.enabled is false")
         cls = self.cls_token.expand(batch, -1, -1)
         fused = self.fusion(torch.cat([cls, tokens], dim=1))
         clip_embedding = fused[:, 0]
-        return {
+        result = {
             "logits": self.classifier(clip_embedding),
             "clip_embedding": clip_embedding,
             "rgb_tokens": rgb_tokens,
             "skeleton_tokens": skeleton_tokens,
             "radar_tokens": radar_tokens,
         }
+        if headturn_token is not None:
+            result["headturn_token"] = headturn_token
+        return result
+

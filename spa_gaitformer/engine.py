@@ -52,6 +52,7 @@ def run_epoch(
                     batch["rgb"],
                     batch["skeleton_features"],
                     batch["rd_maps"],
+                    headturn=batch.get("headturn"),
                 )
                 target = batch["label"]
                 loss = objective(outputs["logits"], target)
@@ -107,3 +108,4 @@ def run_epoch(
     if include_subject_records:
         metrics["subject_predictions"] = subject_records
     return metrics
+

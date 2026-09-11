@@ -29,13 +29,23 @@ def main() -> None:
     args = parse_args()
     config = load_config(args.config)
     device = torch.device(args.device)
+    checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=False)
     data_cfg = config["data"]
+    headturn_enabled = bool(config["model"].get("headturn", {}).get("enabled", False))
     dataset = SpAWindowDataset(
         args.manifest,
         args.task,
         int(data_cfg["image_size"]),
         rd_normalization=data_cfg.get("rd_normalization", "none"),
+        headturn_enabled=headturn_enabled,
     )
+    if headturn_enabled:
+        normalization = checkpoint.get("headturn_normalization")
+        if not normalization:
+            raise ValueError("Head-turn checkpoint lacks training-only normalization metadata")
+        dataset.set_headturn_normalization(
+            float(normalization["mean_deg"]), float(normalization["std_deg"])
+        )
     loader = DataLoader(
         dataset,
         batch_size=int(config["training"]["batch_size"]),
@@ -43,7 +53,6 @@ def main() -> None:
         num_workers=int(config["data"].get("num_workers", 4)),
     )
     model = SpAGaitformer(config, task_num_classes(config, args.task)).to(device)
-    checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=False)
     model.load_state_dict(checkpoint["model"])
     metrics = run_epoch(
         model,
@@ -79,3 +88,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

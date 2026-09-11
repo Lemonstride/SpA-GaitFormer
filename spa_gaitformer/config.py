@@ -79,6 +79,9 @@ def validate_config(config: dict[str, Any], *, formal: bool = False) -> None:
         heads = int(model.get(section, {}).get("transformer_heads" if section == "radar" else "heads", 0))
         if heads <= 0 or shared_dim % heads:
             raise ValueError(f"model.shared_dim={shared_dim} must be divisible by {section} heads={heads}")
+    headturn = model.get("headturn", {})
+    if "enabled" in headturn and not isinstance(headturn["enabled"], bool):
+        raise ValueError("model.headturn.enabled must be a boolean")
 
     if formal:
         missing = [
@@ -103,3 +106,4 @@ def task_num_classes(config: dict[str, Any], task: str) -> int:
     if task not in classes:
         raise ValueError(f"Unknown task {task!r}; expected one of {sorted(classes)}")
     return int(classes[task])
+

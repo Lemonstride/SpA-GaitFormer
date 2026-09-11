@@ -49,3 +49,23 @@ def test_from_scratch_skeletongait_pp_forward() -> None:
     )
     assert outputs["logits"].shape == (1, 2)
     assert outputs["skeleton_tokens"].shape == (1, 2, 32)
+
+
+def test_headturn_token_forward_and_backward() -> None:
+    torch.manual_seed(13)
+    config = deepcopy(load_config(ROOT / "configs" / "smoke.yaml"))
+    config["model"]["headturn"] = {"enabled": True}
+    model = SpAGaitformer(config, num_classes=2)
+    headturn = torch.tensor([[-1.0], [1.0]])
+    outputs = model(
+        rgb=torch.randn(2, 6, 3, 32, 32),
+        skeleton_features=torch.randn(2, 6, 16),
+        rd_maps=torch.randn(2, 2, 1, 16, 16),
+        headturn=headturn,
+    )
+    assert outputs["logits"].shape == (2, 2)
+    assert outputs["headturn_token"].shape == (2, 32)
+    outputs["logits"].sum().backward()
+    assert model.headturn_branch is not None
+    assert any(parameter.grad is not None for parameter in model.headturn_branch.parameters())
+
