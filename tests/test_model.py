@@ -1,3 +1,4 @@
+from copy import deepcopy
 from pathlib import Path
 
 import torch
@@ -27,3 +28,24 @@ def test_multimodal_forward_and_cross_entropy_backward() -> None:
     loss.backward()
     assert torch.isfinite(loss)
 
+
+def test_from_scratch_skeletongait_pp_forward() -> None:
+    torch.manual_seed(11)
+    config = deepcopy(load_config(ROOT / "configs" / "smoke.yaml"))
+    config["model"]["skeleton"] = {
+        "backend": "skeletongait_pp",
+        "feature_dim": 4096,
+        "checkpoint": None,
+        "trainable": True,
+        "opengait_root": str(ROOT / "third_party" / "OpenGait"),
+        "blocks": [1, 1, 1, 1],
+        "channel_multiplier": 2,
+    }
+    model = SpAGaitformer(config, num_classes=2)
+    outputs = model(
+        rgb=torch.randn(1, 6, 3, 32, 32),
+        skeleton_features=torch.randn(1, 6, 3, 64, 44),
+        rd_maps=torch.randn(1, 2, 1, 16, 16),
+    )
+    assert outputs["logits"].shape == (1, 2)
+    assert outputs["skeleton_tokens"].shape == (1, 2, 32)

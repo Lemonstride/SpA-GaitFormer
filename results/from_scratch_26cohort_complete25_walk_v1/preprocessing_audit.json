@@ -1,0 +1,22 @@
+{
+  "status": "preprocessing_complete",
+  "source_cohort_count": 26,
+  "protocol": "complete-case multimodal walk experiment; RGB/skeleton 30 frames, RD 10 frames, strict 3:3:1",
+  "window_count": 973,
+  "subject_count": 25,
+  "binary_windows": {
+    "0": 286,
+    "1": 687
+  },
+  "severity_windows": {
+    "0": 286,
+    "1": 229,
+    "2": 336,
+    "3": 122
+  },
+  "manifest_sha256": "3000d521378227ae699d7548e94677e0678e2295458b693b6b5db9ddcb79bb06",
+  "seed": 2026,
+  "exclusions": {
+    "P-B273B9EC": "walk radar file contains only 84 hardware frames and cannot form one 30-RGB/10-RD window"
+  }
+}

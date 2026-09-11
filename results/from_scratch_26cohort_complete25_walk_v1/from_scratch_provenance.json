@@ -1,0 +1,32 @@
+{
+  "experiment": "independent_from_scratch_baseline",
+  "pretrained_weights": false,
+  "checkpoint_inputs": {
+    "rgb": null,
+    "skeleton": null
+  },
+  "seed": 2026,
+  "software": {
+    "python": "3.10.12",
+    "torch": "2.4.1+cu121",
+    "torchvision": "0.19.1+cu121",
+    "numpy": "2.2.6",
+    "scikit_learn": "1.7.2",
+    "cuda_runtime": "12.1",
+    "gpu": "NVIDIA A100-SXM4-80GB"
+  },
+  "sha256": {
+    "configs/from_scratch_26_walk.yaml": "ce138eb2c0234c809fe790b8d294add634744103f14a5693b1d0c2917395cb52",
+    "spa_gaitformer/alignment.py": "8762ac631e87d5851862576bb6eaba0d710f724e69c75a8f62eb2f6ae9a31a03",
+    "spa_gaitformer/dataset.py": "4b99e44a99b988073661d90473d3d254577f1d88a8a13ac2c7a81fac8e144a73",
+    "spa_gaitformer/engine.py": "cf228937bd15412a6debf0c4786cc280803eb7f364dc60b05455c5e11fc07959",
+    "spa_gaitformer/evaluate.py": "3e5624c587aaa6b69a6d8fd9b867a5534f265a38c9e20c4375119e6c4c14789d",
+    "spa_gaitformer/losses.py": "35a067edc556bd35a937c27b8880ae941417e3dfb8651f63186e24142946a883",
+    "spa_gaitformer/manifest.py": "a21d49e1487e6a47f9a8ea8eb7403fe117a4da211ec3235a7af7f8df6c101467",
+    "spa_gaitformer/metrics.py": "5c5bd3992f78d779960788776b4ca369a2844be6aba9e19f70d09a8f2e1ea7fd",
+    "spa_gaitformer/model.py": "b3d32fdcad58445e514810992a17063dca034aeda3e634044f4204784b2fb46e",
+    "spa_gaitformer/sampling.py": "750f312a67f70e2fb675fe6a1e95ac2249795608a7c4701fb7ad2bf85ce6ea2c",
+    "spa_gaitformer/splits.py": "27f28762d23d43b6fb408bcf42c1652975dd150cba76cce61be3ff538a47511e",
+    "spa_gaitformer/train.py": "dfa7dbe5f1accd73859fa05fb5706fb6035f8a84020e4484431ae44e166788e7"
+  }
+}

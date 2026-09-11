@@ -4,6 +4,8 @@ import argparse
 import csv
 from pathlib import Path
 
+import numpy as np
+
 
 SESSIONS = ("walk", "head_turn")
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".bmp"}
@@ -37,12 +39,39 @@ def load_labels(path: Path) -> dict[str, dict[str, str]]:
 
 
 def npy_steps(path: Path) -> int:
-    import numpy as np
-
     array = np.load(path, mmap_mode="r")
     if array.ndim < 2:
         raise ValueError(f"Expected a temporal array at {path}, got {array.shape}")
     return int(array.shape[0])
+
+
+def load_frame_quality(
+    rgb_session_dir: Path,
+    skeleton_session_dir: Path,
+    expected_frames: int,
+) -> tuple[list[bool], np.ndarray]:
+    roi_path = rgb_session_dir / "roi_frames.csv"
+    silhouette_path = skeleton_session_dir / "silhouette" / "silhouette_frames.csv"
+    with roi_path.open(newline="", encoding="utf-8-sig") as handle:
+        roi_rows = list(csv.DictReader(handle))
+    with silhouette_path.open(newline="", encoding="utf-8-sig") as handle:
+        silhouette_rows = list(csv.DictReader(handle))
+    if len(roi_rows) != expected_frames or len(silhouette_rows) != expected_frames:
+        raise ValueError(
+            f"Frame-quality inventory mismatch in {rgb_session_dir}: "
+            f"RGB={expected_frames}, ROI={len(roi_rows)}, silhouette={len(silhouette_rows)}"
+        )
+    eligible = [
+        roi["valid_for_training"] == "1" and int(silhouette["area"]) > 0
+        for roi, silhouette in zip(roi_rows, silhouette_rows)
+    ]
+    timestamps = np.asarray([float(row["timestamp_ms"]) for row in roi_rows], dtype=np.float64)
+    differences = np.diff(timestamps)
+    if not np.isfinite(timestamps).all() or np.any(differences <= 0):
+        raise ValueError(f"Non-finite or non-increasing timestamps in {roi_path}")
+    nominal = float(np.median(differences)) if differences.size else 0.0
+    gaps = differences > 1.5 * nominal if differences.size else differences.astype(bool)
+    return eligible, gaps
 
 
 def build_manifest(
@@ -52,6 +81,9 @@ def build_manifest(
     skeleton_root: Path,
     rd_window: int,
     rd_stride: int,
+    sessions: tuple[str, ...] = SESSIONS,
+    require_valid_frames: bool = False,
+    excluded_subjects: frozenset[str] = frozenset(),
 ) -> list[dict[str, object]]:
     labels = load_labels(labels_csv)
     rows: list[dict[str, object]] = []
@@ -59,7 +91,9 @@ def build_manifest(
         subject = subject_dir.name
         if subject not in labels:
             raise ValueError(f"No clinical label for subject {subject}")
-        for session in SESSIONS:
+        if subject in excluded_subjects:
+            continue
+        for session in sessions:
             rgb_dir = subject_dir / session / "rgb"
             rd_path = rd_root / subject / session / "rd.npy"
             skeleton_path = skeleton_root / subject / session / "frame_features.npy"
@@ -76,19 +110,42 @@ def build_manifest(
                 raise ValueError(
                     f"RGB/skeleton frame mismatch for {subject}/{session}: {rgb_steps} != {skeleton_steps}"
                 )
-            expected_rgb_steps = rd_steps * 3
-            if rgb_steps != expected_rgb_steps:
+            synchronized_rd_steps = min(rd_steps, rgb_steps // 3)
+            if rgb_steps < rd_steps * 3:
                 raise ValueError(
-                    f"Exact 3:1 frame-feature alignment failed for {subject}/{session}: "
-                    f"expected RGB/skeleton={expected_rgb_steps} for RD={rd_steps}, "
-                    f"got RGB/skeleton={rgb_steps}"
+                    f"Not enough RGB/skeleton frames for exact 3:1 alignment in {subject}/{session}: "
+                    f"RGB={rgb_steps}, RD={rd_steps}"
                 )
 
-            for window_id in range(count_windows(rd_steps, rd_window, rd_stride)):
+            eligible: list[bool] | None = None
+            gaps: np.ndarray | None = None
+            quality_available = (
+                (subject_dir / session / "roi_frames.csv").is_file()
+                and (
+                    skeleton_root
+                    / subject
+                    / session
+                    / "silhouette"
+                    / "silhouette_frames.csv"
+                ).is_file()
+            )
+            if require_valid_frames or quality_available:
+                eligible, gaps = load_frame_quality(
+                    subject_dir / session,
+                    skeleton_root / subject / session,
+                    rgb_steps,
+                )
+
+            for window_id in range(count_windows(synchronized_rd_steps, rd_window, rd_stride)):
                 rd_start = window_id * rd_stride
                 rd_end = rd_start + rd_window
                 rgb_start = rd_start * 3
                 rgb_end = rd_end * 3
+                if eligible is not None and gaps is not None:
+                    if not all(eligible[rgb_start:rgb_end]):
+                        continue
+                    if np.any(gaps[rgb_start : rgb_end - 1]):
+                        continue
                 rows.append(
                     {
                         "subject_id": subject,
@@ -126,6 +183,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--skeleton-root", type=Path, required=True)
     parser.add_argument("--rd-window", type=int, required=True)
     parser.add_argument("--rd-stride", type=int, required=True)
+    parser.add_argument("--sessions", nargs="+", choices=SESSIONS, default=list(SESSIONS))
+    parser.add_argument(
+        "--require-valid-frames",
+        action="store_true",
+        help="Exclude windows containing invalid ROI, empty silhouette, or timestamp gaps.",
+    )
+    parser.add_argument(
+        "--exclude-subjects",
+        nargs="*",
+        default=[],
+        help="Subject IDs excluded from a complete-case multimodal manifest.",
+    )
     parser.add_argument("--output", type=Path, required=True)
     return parser.parse_args()
 
@@ -139,6 +208,9 @@ def main() -> None:
         args.skeleton_root.resolve(),
         args.rd_window,
         args.rd_stride,
+        tuple(args.sessions),
+        args.require_valid_frames,
+        frozenset(args.exclude_subjects),
     )
     write_manifest(rows, args.output.resolve())
     print(f"Wrote {len(rows)} strict synchronized windows to {args.output.resolve()}")
@@ -146,4 +218,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -29,7 +29,13 @@ def main() -> None:
     args = parse_args()
     config = load_config(args.config)
     device = torch.device(args.device)
-    dataset = SpAWindowDataset(args.manifest, args.task, int(config["data"]["image_size"]))
+    data_cfg = config["data"]
+    dataset = SpAWindowDataset(
+        args.manifest,
+        args.task,
+        int(data_cfg["image_size"]),
+        rd_normalization=data_cfg.get("rd_normalization", "none"),
+    )
     loader = DataLoader(
         dataset,
         batch_size=int(config["training"]["batch_size"]),
@@ -39,8 +45,32 @@ def main() -> None:
     model = SpAGaitformer(config, task_num_classes(config, args.task)).to(device)
     checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=False)
     model.load_state_dict(checkpoint["model"])
-    metrics = run_epoch(model, loader, ClassificationObjective(), device)
-    payload = json.dumps(metrics, indent=2, ensure_ascii=False)
+    metrics = run_epoch(
+        model,
+        loader,
+        ClassificationObjective(),
+        device,
+        mixed_precision=bool(config["training"].get("mixed_precision", False)),
+        include_subject_records=True,
+    )
+    subject_predictions = metrics.pop("subject_predictions")
+    window_level = {
+        key: metrics[key]
+        for key in ("accuracy", "macro_precision", "macro_recall", "macro_f1", "loss", "window_count")
+    }
+    subject_level = {
+        key.removeprefix("subject_"): value
+        for key, value in metrics.items()
+        if key.startswith("subject_")
+    }
+    result = {
+        "primary_evaluation_unit": "subject",
+        "aggregation": "mean_softmax_probability_over_all_valid_subject_windows",
+        "subject_level": subject_level,
+        "window_level": window_level,
+        "subject_predictions": subject_predictions,
+    }
+    payload = json.dumps(result, indent=2, ensure_ascii=False)
     print(payload)
     if args.output:
         args.output.resolve().parent.mkdir(parents=True, exist_ok=True)
@@ -49,4 +79,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

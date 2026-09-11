@@ -8,6 +8,31 @@ import cv2
 import numpy as np
 
 
+MEDIAPIPE_33_TO_COCO_17 = np.asarray(
+    [0, 2, 5, 7, 8, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28],
+    dtype=np.int64,
+)
+
+
+def to_coco17(keypoints: np.ndarray, input_format: str = "auto") -> np.ndarray:
+    if keypoints.ndim != 3 or keypoints.shape[2] != 3:
+        raise ValueError(f"Expected keypoints [T,J,3], got {keypoints.shape}")
+
+    joints = keypoints.shape[1]
+    resolved_format = input_format
+    if input_format == "auto":
+        resolved_format = {17: "coco17", 33: "mediapipe33"}.get(joints, "unknown")
+
+    if resolved_format == "coco17" and joints == 17:
+        return keypoints.astype(np.float32, copy=False)
+    if resolved_format == "mediapipe33" and joints == 33:
+        return keypoints[:, MEDIAPIPE_33_TO_COCO_17].astype(np.float32, copy=False)
+    raise ValueError(
+        f"Input format {input_format!r} is incompatible with {joints} joints; "
+        "expected COCO-17 or MediaPipe-33 keypoints"
+    )
+
+
 def load_heatmap_factory(opengait_root: Path):
     source = opengait_root / "datasets" / "pretreatment_heatmap.py"
     spec = importlib.util.spec_from_file_location("opengait_heatmap", source)
@@ -34,6 +59,12 @@ def load_silhouettes(directory: Path, frames: int) -> np.ndarray:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build official SkeletonGait++ pose/silhouette tensor")
     parser.add_argument("--keypoints", type=Path, required=True, help="COCO-17 [T,17,3] kpt2d.npy")
+    parser.add_argument(
+        "--input-format",
+        choices=("auto", "coco17", "mediapipe33"),
+        default="auto",
+        help="Keypoint layout. auto infers COCO-17 or MediaPipe-33 from the joint count.",
+    )
     parser.add_argument("--silhouette-dir", type=Path, required=True)
     parser.add_argument("--opengait-root", type=Path, default=Path("third_party/OpenGait"))
     parser.add_argument("--output", type=Path, required=True)
@@ -42,9 +73,10 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    keypoints = np.load(args.keypoints.resolve()).astype(np.float32)
-    if keypoints.ndim != 3 or keypoints.shape[1:] != (17, 3):
-        raise ValueError(f"Expected COCO-17 keypoints [T,17,3], got {keypoints.shape}")
+    keypoints = to_coco17(
+        np.load(args.keypoints.resolve()).astype(np.float32),
+        args.input_format,
+    )
     factory = load_heatmap_factory(args.opengait_root.resolve())
     transform = factory(
         {"transfer_to_coco17": False},
@@ -66,4 +98,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

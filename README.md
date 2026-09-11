@@ -1,134 +1,199 @@
 # SpA-GaitFormer
 
-SpA-GaitFormer is the reproducible implementation for the SpA-MMD
-paper. It implements the paper's RGB ViT, SkeletonGait++ feature adapter,
-mmWave range-Doppler (RD) temporal Transformer, strict frame-feature-level 3:1
-alignment, cross-modal Transformer, supervised cross-entropy training, and
-subject-independent evaluation.
+SpA-GaitFormer is the research implementation accompanying the SpA-MMD
+multimodal movement-assessment study. It combines RGB video, depth-derived
+skeleton representations, and 60 GHz millimeter-wave range--Doppler (RD) maps
+for ankylosing-spondylitis (AS) versus healthy-control classification and
+four-class functional-stratum classification.
+
+This repository is provided for inspection and research verification under the
+terms in [LICENSE.md](LICENSE.md). It is not a clinical diagnostic system.
 
 ## License Attention
-Source available for inspection, academic reference, and citation only.
-No permission is granted to run, reuse, modify, or redistribute this code.
-See LICENSE.md.
 
-## Reproduction status
+The source is visible for inspection, academic reference, and citation only.
+No permission is granted to run, reuse, modify, redistribute, or incorporate
+this code into another project except where separately required by an
+identified third-party license. See [LICENSE.md](LICENSE.md) for the controlling
+terms.
 
-The following parts are implemented and testable:
+## Architecture
 
-- RGB frames are encoded independently by the original ViT-B/16 architecture.
-- SkeletonGait++ frame features are projected into the shared token dimension.
-- Every three RGB and three skeleton frame features are mean-pooled to match one
-  RD frame. Shape checks reject any sequence that violates the exact 3:1 ratio.
-- RD maps are encoded per frame and then modeled by a temporal Transformer.
-- Modality and temporal embeddings plus a cross-modal Transformer produce the
-  clip representation and classification logits.
-- Binary and four-class tasks use separate models and unweighted batch-mean
-  cross-entropy, Adam with learning rate `1e-4`, batch size 16, and 50 epochs.
-- Subject-independent repeated splits, macro metrics, checkpoints, ablations,
-  and strict window counting are provided.
+- Original ViT-B/16 encodes each `224 x 224` RGB frame into a 768-dimensional
+  representation.
+- The official SkeletonGait++ P3D front end encodes pose-heatmap and silhouette
+  inputs and exposes 4,096-dimensional frame features.
+- A CNN followed by a two-layer temporal Transformer encodes RD maps.
+- Linear projection and normalisation map all branches to a shared
+  256-dimensional space.
+- Three RGB features, three skeleton features, and one RD feature from the same
+  physical interval are aligned with a strict frame-level `3:3:1` rule.
+- A three-layer, eight-head cross-modal Transformer with modality/time
+  embeddings and a learned `[CLS]` token produces the fused representation.
+- Binary and four-class models are trained separately with unweighted
+  cross-entropy.
 
-The uploaded public data currently contains only `S01`, whose labels are
-`unknown`. Its raw radar `.bin` files are present, but the acquisition profile
-needed to reconstruct RD maps is absent. Therefore this repository can validate
-the data path and model path, but it cannot honestly reproduce the paper's
-30-subject, 3,595-window metrics until the following experiment assets are added:
+SkeletonGait++ is used as a convolutional/P3D front end. Its output is projected
+into the shared token space before cross-modal Transformer fusion; it is not
+described as a Transformer architecture itself.
 
-1. Clinical labels for all subjects.
-2. All subject folders used in the paper.
-3. The exact window length and stride used in the reported experiments.
-4. Radar acquisition parameters such as ADC samples, chirps, RX/TX layout,
-   sample rate, slope, and FFT settings.
-5. The pose-landmarker asset and the actual ViT/SkeletonGait++ checkpoints.
+## Verified From-Scratch Baseline
 
-No script silently invents these values. Formal commands fail with an actionable
-message when required evidence is missing.
+The repository includes an independent walk-only sensitivity experiment that
+is separate from the paper's archived pre-training and fine-tuning results.
 
-## Repository layout
+- Source cohort: 26 participants, including 19 patients with AS and 7 healthy
+  controls.
+- Complete-case cohort: 25 participants. One walking radar recording was too
+  short to form a complete tri-modal window and was excluded before splitting.
+- Data: 973 strictly aligned walking windows, comprising 286 healthy-control
+  and 687 AS windows. Four-class counts are 286 healthy, 229 mild, 336 moderate,
+  and 122 severe windows.
+- Window structure: 30 RGB frames, 30 skeleton frames, and 10 RD maps; strides
+  are 15, 15, and 5 frames, respectively.
+- Initialisation: no transferred ViT or SkeletonGait++ weights; all model
+  components are trained from random initialisation.
+- Evaluation: five repeated subject-independent holdouts. Binary splits contain
+  18/4/3 train/validation/test participants; four-class splits contain 17/4/4.
+- Selection and aggregation: the best checkpoint is selected by validation
+  subject-level macro-F1. Test-window softmax probabilities are averaged per
+  participant before assigning one participant-level prediction.
+
+The aggregate metrics, provenance, integrity audit, and checkpoint hashes are
+browsable under
+[`results/from_scratch_26cohort_complete25_walk_v1`](results/from_scratch_26cohort_complete25_walk_v1).
+The complete de-identified bundle of manifests, histories, run configurations,
+test predictions, logs, and audits is provided as
+[`results/from_scratch_26cohort_complete25_walk_v1.tar.gz`](results/from_scratch_26cohort_complete25_walk_v1.tar.gz).
+These results quantify a small-cohort, randomly initialised baseline and must
+not be compared directly with experiments that use different tasks, cohorts,
+pre-training, or evaluation units.
+
+## Training Augmentation
+
+The verified baseline uses the deterministic `subject_cycle_rgb32_v1` policy on
+training samples only. Each participant cycles through 32 label-blind views over
+epochs. A single view is applied consistently to every frame in a window:
+
+- RGB uses mild brightness, contrast, saturation, and gamma changes together
+  with optional horizontal mirroring and non-cropping shrink/pad geometry.
+- Pose heatmaps and silhouettes receive the corresponding mirror and geometry
+  transformation.
+- RD maps receive per-window normalisation but no random noise or amplitude
+  perturbation in this experiment.
+- Temporal reversal, dropping, and masking are disabled.
+
+Validation and test windows are not augmented. The training sampler assigns
+equal total mass to each class and equal participant mass within each class.
+
+## Repository Layout
 
 ```text
-configs/                 formal and smoke-test configurations
-scripts/                 preprocessing and SkeletonGait++ extraction helpers
-spa_gaitformer/          model, data, training, metrics, and CLI code
+configs/                 experiment and smoke-test configurations
+docs/                    verification notes and methodological boundaries
+results/                 de-identified experiment artifacts
+scripts/                 preprocessing, execution, and export helpers
+spa_gaitformer/          data, model, training, evaluation, and metrics code
 tests/                   unit and tensor-interface tests
-third_party/OpenGait/    pinned official OpenGait Git submodule
+third_party/OpenGait/    pinned OpenGait Git submodule
 ```
 
-## Install
-
-Clone the repository together with its pinned OpenGait dependency:
+## Installation
 
 ```bash
-git clone --recurse-submodules https://github.com/Lemonstride/SpA-GaitFormer.git
-cd SpA-GaitFormer
-python -m pip install -e '.[dev,opengait]'
-```
-
-For an existing checkout, initialize or refresh the submodule with:
-
-```bash
-git pull
 git submodule update --init --recursive
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -U pip
+python -m pip install -e ".[dev,opengait]"
 ```
 
-## Data contract
+Use an environment with a CUDA-enabled PyTorch build for GPU training. The code
+also supports CPU smoke tests, although the full model is computationally heavy.
 
-Each manifest row identifies one synchronized clip. The model expects:
+## Data Contract
+
+Each manifest row identifies one synchronized window and contains paths to RGB
+frames, skeleton tensors, and RD tensors plus temporal indices and task labels.
+The model expects:
 
 - RGB: `[3T, 3, H, W]`
-- SkeletonGait++ frame features: `[3T, D_skeleton]`
+- Skeleton input: `[3T, 3, 64, 44]` for the SkeletonGait++ backend, or cached
+  frame features `[3T, 4096]`
 - RD maps: `[T, 1, H_rd, W_rd]`
 
-The feature extractor stores skeleton features before multimodal pooling. The
-model itself performs both three-frame pooling operations, making the 3:1 rule
-explicit and testable rather than relying on filenames or nominal frame rates.
+Shape checks reject incomplete windows or sequences that violate the exact
+`3:3:1` relationship.
 
-Generate a window manifest only after RD and skeleton features exist:
+Generate a manifest after all modality features are available:
 
 ```bash
 spa-build-manifest \
-  --processed-root /path/to/SpA-MMD-processed \
+  --processed-root /path/to/processed-rgb \
   --labels-csv /path/to/clinical_labels.csv \
-  --rd-root /path/to/rd_maps \
-  --skeleton-root /path/to/skeleton_frame_features \
-  --rd-window 30 --rd-stride 15 \
-  --output manifests/all.csv
+  --rd-root /path/to/rd-maps \
+  --skeleton-root /path/to/skeleton-features \
+  --rd-window 10 \
+  --rd-stride 5 \
+  --sessions walk \
+  --output manifests/all_walk.csv
 ```
 
-The values `30` and `15` above are examples, not recovered paper settings.
-
-Create five subject-independent split sets:
+Create subject-independent splits and run one task:
 
 ```bash
-spa-make-splits --manifest manifests/all.csv --output-dir manifests/splits \
-  --repeats 5 --train-ratio 0.70 --val-ratio 0.15
+spa-make-splits \
+  --manifest manifests/all_walk.csv \
+  --output-dir manifests/binary \
+  --task binary \
+  --repeats 5 \
+  --train-ratio 0.70 \
+  --val-ratio 0.15 \
+  --seed 2026
+
+spa-train \
+  --config configs/from_scratch_26_walk.yaml \
+  --train-manifest manifests/binary/split_0_train.csv \
+  --val-manifest manifests/binary/split_0_val.csv \
+  --task binary \
+  --output-dir outputs/binary_split_0
+
+spa-evaluate \
+  --config configs/from_scratch_26_walk.yaml \
+  --manifest manifests/binary/split_0_test.csv \
+  --task binary \
+  --checkpoint outputs/binary_split_0/best.pt \
+  --output outputs/binary_split_0/test_metrics.json
 ```
 
-The ratios are also explicit inputs because the manuscript does not currently
-state the original values.
+The batch runners accept `SPA_GAITFORMER_ROOT`, `PYTHON_BIN`, `RUN_DIR`,
+`CONFIG_PATH`, `CUDA_DEVICE`, and `DEVICE` environment variables and do not rely
+on a particular computing platform.
 
-## Training and evaluation
+## Publishing Result Artifacts
 
-Fill the `null` experiment parameters and local checkpoint paths in
-`configs/spa_mmd.yaml`, then run binary and severity tasks separately:
+`scripts/prepare_public_results.py` creates a portable text-only archive. It
+replaces private absolute roots, maps internal participant IDs to stable public
+codes using a private non-exported salt, records checkpoint hashes, and produces
+an `ARTIFACTS.sha256` inventory. Model checkpoints are deliberately excluded
+from the GitHub archive because each full-model checkpoint is approximately
+397 MB.
 
 ```bash
-spa-train --config configs/spa_mmd.yaml \
-  --train-manifest manifests/splits/split_0_train.csv \
-  --val-manifest manifests/splits/split_0_val.csv \
-  --task binary --output-dir outputs/binary_split_0
-
-spa-evaluate --config configs/spa_mmd.yaml \
-  --manifest manifests/splits/split_0_test.csv \
-  --task binary --checkpoint outputs/binary_split_0/best.pt
+python scripts/prepare_public_results.py \
+  --run-dir /path/to/private-run \
+  --output-dir /path/to/public-export \
+  --config configs/from_scratch_26_walk.yaml \
+  --redact-root /path/to/private-root
 ```
 
-For interface validation without paper assets, use `configs/smoke.yaml` and
-`scripts/make_synthetic_dataset.py`. Smoke results are software checks only.
+Synthetic smoke results validate software interfaces only and are never
+reported as research performance. Radar-derived physical axes also require the
+archived acquisition profile; provisional FFT layouts must not be presented as
+confirmed distance or velocity calibration.
 
-## Third-party provenance
+## Third-Party Provenance
 
-`third_party/OpenGait` is a Git submodule pointing to a pinned commit from the
-official OpenGait project; provenance is recorded in `THIRD_PARTY.md`.
-SkeletonGait++ is used as a convolutional/P3D front-end whose extracted frame
-features are projected into SpA-GaitFormer's Transformer token space; it is not
-described as a Transformer itself.
+`third_party/OpenGait` points to the official OpenGait source at the commit
+recorded in [THIRD_PARTY.md](THIRD_PARTY.md). OpenGait remains subject to its own
+license and upstream terms.

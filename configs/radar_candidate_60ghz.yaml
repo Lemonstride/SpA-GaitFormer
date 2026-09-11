@@ -1,0 +1,13 @@
+# Candidate reconstruction supported by DCA1000 file block sizes and S01 RD
+# diagnostics. It is not an archived acquisition profile.
+sensor: TI IWR6843ISK-ODS
+carrier_band_ghz: [60, 64]
+num_adc_samples: 256
+chirps_per_hardware_frame: 48
+num_rx: 4
+num_tx: 3
+adc_dtype: little_endian_int16
+iq_order: sample_rx_iq
+remove_static_clutter: true
+physical_axis_calibrated: false
+status: provisional

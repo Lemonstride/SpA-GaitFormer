@@ -7,6 +7,9 @@ data:
   rd_window: 2
   rd_stride: 1
   num_workers: 0
+  rd_normalization: none
+  augmentation:
+    enabled: false
 
 model:
   num_classes:
@@ -46,4 +49,3 @@ evaluation:
   train_ratio: 0.6
   val_ratio: 0.2
   subject_independent: true
-

@@ -1,0 +1,11 @@
+{
+  "source_run": "from_scratch_26cohort_complete25_walk_v1",
+  "text_artifact_count": 73,
+  "subject_count": 26,
+  "subject_id_method": "HMAC-SHA256 with a private, non-exported salt",
+  "redacted_root_count": 1,
+  "excluded_binary_artifacts": [
+    "*.pt checkpoints"
+  ],
+  "checkpoint_count": 10
+}

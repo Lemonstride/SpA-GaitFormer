@@ -4,27 +4,22 @@ task: binary
 data:
   image_size: 224
   ratio_rgb_to_rd: 3
-  rd_window: null
-  rd_stride: null
+  rd_window: 10
+  rd_stride: 5
   num_workers: 4
   rd_normalization: per_window
   augmentation:
     enabled: true
-    rgb:
-      crop_scale_min: 0.90
-      horizontal_flip_p: 0.50
-      brightness: 0.12
-      contrast: 0.12
-      saturation: 0.08
+    policy: subject_cycle_rgb32_v1
+    seed: 2026
     skeleton:
-      noise_std: 0.01
-      feature_dropout_p: 0.01
+      noise_std: 0.0
+      feature_dropout_p: 0.0
     radar:
-      amplitude_scale: [0.90, 1.10]
-      noise_std: 0.01
+      amplitude_scale: [1.0, 1.0]
+      noise_std: 0.0
     temporal:
-      mask_p: 0.20
-      max_mask_fraction: 0.10
+      mask_p: 0.0
 
 model:
   num_classes:
@@ -41,7 +36,7 @@ model:
     feature_dim: 4096
     checkpoint: null
     trainable: true
-    opengait_root: third_party/OpenGait
+    opengait_root: ${PRIVATE_ROOT_1}/codes/SpA-GaitFormer/third_party/OpenGait
     blocks: [1, 1, 1, 1]
     channel_multiplier: 2
   radar:
@@ -57,14 +52,17 @@ training:
   optimizer: adam
   learning_rate: 0.0001
   weight_decay: 0.0
-  batch_size: 16
+  batch_size: 2
+  gradient_accumulation_steps: 8
+  mixed_precision: true
   epochs: 50
   loss: cross_entropy
   class_weights: null
-  primary_metric: macro_f1
+  sampling: subject_class_balanced
+  primary_metric: subject_macro_f1
 
 evaluation:
   repeats: 5
-  train_ratio: null
-  val_ratio: null
+  train_ratio: 0.70
+  val_ratio: 0.15
   subject_independent: true

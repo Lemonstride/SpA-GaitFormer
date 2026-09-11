@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import importlib.util
+import sys
+import types
 from pathlib import Path
 from typing import Any
 
@@ -76,28 +79,119 @@ class RGBBranch(nn.Module):
         return pool_three_frame_features(features)
 
 
+def load_skeletongait_pp_class(opengait_root: Path) -> type[nn.Module]:
+    opengait_package = opengait_root / "opengait"
+    source = opengait_package / "modeling" / "models" / "skeletongait++.py"
+    if not source.is_file():
+        raise FileNotFoundError(f"Official SkeletonGait++ source does not exist: {source}")
+    if str(opengait_package) not in sys.path:
+        sys.path.insert(0, str(opengait_package))
+    import modeling.base_model  # noqa: F401
+
+    if "modeling.models" not in sys.modules:
+        models_package = types.ModuleType("modeling.models")
+        models_package.__path__ = [str(opengait_package / "modeling" / "models")]
+        sys.modules["modeling.models"] = models_package
+    module_name = "modeling.models.skeletongait_pp_spa"
+    if module_name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(module_name, source)
+        if spec is None or spec.loader is None:
+            raise ImportError(f"Cannot load official SkeletonGait++ source: {source}")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+    return sys.modules[module_name].SkeletonGaitPP
+
+
+class SkeletonGaitPPFrameEncoder(nn.Module):
+    """Trainable official SkeletonGait++ P3D backbone with frame-level taps."""
+
+    def __init__(self, cfg: dict[str, Any]) -> None:
+        super().__init__()
+        model_class = load_skeletongait_pp_class(
+            Path(cfg.get("opengait_root", "third_party/OpenGait")).expanduser().resolve()
+        )
+        network = model_class.__new__(model_class)
+        nn.Module.__init__(network)
+        channel_multiplier = int(cfg.get("channel_multiplier", 2))
+        network.build_network(
+            {
+                "Backbone": {
+                    "in_channels": 3,
+                    "blocks": list(cfg.get("blocks", [1, 1, 1, 1])),
+                    "C": channel_multiplier,
+                },
+                "SeparateBNNecks": {"class_num": 2},
+                "use_emb2": False,
+            }
+        )
+        self.network = network
+        self.output_dim = 16 * 128 * channel_multiplier
+        checkpoint = cfg.get("checkpoint")
+        if checkpoint:
+            path = Path(checkpoint).expanduser().resolve()
+            if not path.is_file():
+                raise FileNotFoundError(f"SkeletonGait++ checkpoint does not exist: {path}")
+            state = torch.load(path, map_location="cpu", weights_only=False)
+            if isinstance(state, dict):
+                state = state.get("model", state.get("state_dict", state))
+            self.network.load_state_dict(state, strict=False)
+
+    def forward(self, pose_sil: torch.Tensor) -> torch.Tensor:
+        if pose_sil.ndim != 5 or pose_sil.shape[2:] != (3, 64, 44):
+            raise ValueError(
+                "SkeletonGait++ input must be [B,T,3,64,44], "
+                f"got {tuple(pose_sil.shape)}"
+            )
+        pose = pose_sil.transpose(1, 2).contiguous()
+        maps = pose[:, :2]
+        silhouettes = pose[:, 2].unsqueeze(1)
+        map_features = self.network.map_layer1(self.network.map_layer0(maps))
+        silhouette_features = self.network.sil_layer1(self.network.sil_layer0(silhouettes))
+        features = self.network.fusion(silhouette_features, map_features)
+        features = self.network.layer4(self.network.layer3(self.network.layer2(features)))
+        batch, channels, frames, height, width = features.shape
+        frame_maps = features.permute(0, 2, 1, 3, 4).reshape(
+            batch * frames, channels, height, width
+        )
+        frame_features = self.network.FCs(self.network.HPP(frame_maps))
+        return frame_features.reshape(batch, frames, -1)
+
+
 class SkeletonFeatureBranch(nn.Module):
-    """Projects frame features tapped from official SkeletonGait++ into tokens."""
+    """Encodes pose-silhouette maps or projects cached SkeletonGait++ features."""
 
     def __init__(self, cfg: dict[str, Any], shared_dim: int) -> None:
         super().__init__()
-        feature_dim = int(cfg["feature_dim"])
+        self.backend = cfg.get("backend", "frame_features")
+        if self.backend == "skeletongait_pp":
+            self.encoder: nn.Module | None = SkeletonGaitPPFrameEncoder(cfg)
+            feature_dim = int(self.encoder.output_dim)
+        elif self.backend == "frame_features":
+            self.encoder = None
+            feature_dim = int(cfg["feature_dim"])
+        else:
+            raise ValueError(f"Unsupported skeleton backend: {self.backend}")
+        configured_dim = int(cfg.get("feature_dim", feature_dim))
+        if configured_dim != feature_dim:
+            raise ValueError(
+                f"Configured skeleton feature_dim={configured_dim}, encoder emits {feature_dim}"
+            )
         self.projection = nn.Sequential(
             nn.LayerNorm(feature_dim),
             nn.Linear(feature_dim, shared_dim),
         )
-        checkpoint = cfg.get("checkpoint")
-        if checkpoint and not Path(checkpoint).expanduser().is_file():
-            raise FileNotFoundError(f"SkeletonGait++ checkpoint does not exist: {checkpoint}")
         trainable = bool(cfg.get("trainable", True))
         for parameter in self.parameters():
             parameter.requires_grad = trainable
 
     def forward(self, frame_features: torch.Tensor) -> torch.Tensor:
-        if frame_features.ndim != 3:
+        if self.encoder is not None:
+            frame_features = self.encoder(frame_features)
+        elif frame_features.ndim != 3:
             raise ValueError(
-                "Skeleton input must be frame features [B,T,D] exported from SkeletonGait++, "
-                f"got {tuple(frame_features.shape)}"
+                "Cached skeleton input must be frame features [B,T,D] exported from "
+                f"SkeletonGait++, got {tuple(frame_features.shape)}"
             )
         return pool_three_frame_features(self.projection(frame_features))
 
@@ -218,4 +312,3 @@ class SpAGaitformer(nn.Module):
             "skeleton_tokens": skeleton_tokens,
             "radar_tokens": radar_tokens,
         }
-

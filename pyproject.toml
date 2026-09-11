@@ -26,7 +26,6 @@ spa-build-manifest = "spa_gaitformer.manifest:main"
 spa-make-splits = "spa_gaitformer.splits:main"
 spa-train = "spa_gaitformer.train:main"
 spa-evaluate = "spa_gaitformer.evaluate:main"
-spa-radar-to-rd = "spa_gaitformer.radar:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

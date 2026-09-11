@@ -1,9 +1,8 @@
 from pathlib import Path
 
-import numpy as np
 import pytest
 
-from spa_gaitformer.manifest import build_manifest, count_windows, load_labels
+from spa_gaitformer.manifest import count_windows, load_frame_quality, load_labels
 
 
 def test_window_count_uses_total_windows() -> None:
@@ -20,26 +19,29 @@ def test_unknown_clinical_label_is_rejected(tmp_path: Path) -> None:
         load_labels(labels)
 
 
-def test_manifest_rejects_extra_rgb_and_skeleton_frames(tmp_path: Path) -> None:
-    processed = tmp_path / "processed"
-    skeleton_root = tmp_path / "skeleton"
-    rd_root = tmp_path / "rd"
-    rgb_dir = processed / "S01" / "walk" / "rgb"
-    rgb_dir.mkdir(parents=True)
-    for frame in range(9):
-        (rgb_dir / f"frame_{frame:03d}.png").touch()
-
-    skeleton_path = skeleton_root / "S01" / "walk" / "frame_features.npy"
-    skeleton_path.parent.mkdir(parents=True)
-    np.save(skeleton_path, np.zeros((9, 4), dtype=np.float32))
-    rd_path = rd_root / "S01" / "walk" / "rd.npy"
-    rd_path.parent.mkdir(parents=True)
-    np.save(rd_path, np.zeros((2, 4, 4), dtype=np.float32))
-
-    labels = tmp_path / "labels.csv"
-    labels.write_text(
-        "subject_id,binary_label,severity_label\nS01,1,2\n", encoding="utf-8"
+def test_frame_quality_combines_roi_silhouette_and_timestamps(tmp_path: Path) -> None:
+    rgb = tmp_path / "rgb_session"
+    skeleton = tmp_path / "skeleton_session" / "silhouette"
+    rgb.mkdir()
+    skeleton.mkdir(parents=True)
+    (rgb / "roi_frames.csv").write_text(
+        "file_name,timestamp_ms,valid_for_training\n"
+        "frame_1.png,0,1\n"
+        "frame_2.png,33,0\n"
+        "frame_3.png,66,1\n"
+        "frame_4.png,166,1\n",
+        encoding="utf-8",
     )
-    with pytest.raises(ValueError, match="Exact 3:1"):
-        build_manifest(processed, labels, rd_root, skeleton_root, rd_window=2, rd_stride=1)
+    (skeleton / "silhouette_frames.csv").write_text(
+        "file_name,area\n"
+        "frame_1.png,100\n"
+        "frame_2.png,100\n"
+        "frame_3.png,0\n"
+        "frame_4.png,100\n",
+        encoding="utf-8",
+    )
 
+    eligible, gaps = load_frame_quality(rgb, skeleton.parent, 4)
+
+    assert eligible == [True, False, False, True]
+    assert gaps.tolist() == [False, False, True]

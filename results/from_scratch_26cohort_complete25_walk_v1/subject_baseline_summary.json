@@ -1,0 +1,330 @@
+{
+  "experiment": "independent_from_scratch_baseline",
+  "tasks": {
+    "binary": {
+      "task": "binary",
+      "repeats": 5,
+      "primary_evaluation_unit": "subject",
+      "aggregation": "mean_softmax_probability_over_all_valid_subject_windows",
+      "summary": {
+        "accuracy": {
+          "mean": 0.5333333333333333,
+          "sample_std": 0.18257418583505536,
+          "values": [
+            0.3333333333333333,
+            0.3333333333333333,
+            0.6666666666666666,
+            0.6666666666666666,
+            0.6666666666666666
+          ]
+        },
+        "macro_precision": {
+          "mean": 0.29999999999999993,
+          "sample_std": 0.04564354645876384,
+          "values": [
+            0.25,
+            0.25,
+            0.3333333333333333,
+            0.3333333333333333,
+            0.3333333333333333
+          ]
+        },
+        "macro_recall": {
+          "mean": 0.4,
+          "sample_std": 0.13693063937629152,
+          "values": [
+            0.25,
+            0.25,
+            0.5,
+            0.5,
+            0.5
+          ]
+        },
+        "macro_f1": {
+          "mean": 0.34,
+          "sample_std": 0.08215838362577493,
+          "values": [
+            0.25,
+            0.25,
+            0.4,
+            0.4,
+            0.4
+          ]
+        }
+      },
+      "test_subject_occurrences": {
+        "P-389D11EB": 2,
+        "P-2D1C6305": 1,
+        "P-0CF0533B": 2,
+        "P-60A7973B": 2,
+        "P-52A6D9CA": 2,
+        "P-1BDF8CDA": 2,
+        "P-17D8E113": 1,
+        "P-132E993B": 1,
+        "P-57C0B3CB": 1,
+        "P-BE2CEC24": 1
+      },
+      "runs": [
+        {
+          "split": 0,
+          "path": "${PRIVATE_ROOT_1}/codes/SpA-GaitFormer/runs/from_scratch_26cohort_complete25_walk_v1/outputs/binary_split_0/test_metrics.json",
+          "subject_level": {
+            "accuracy": 0.3333333333333333,
+            "macro_precision": 0.25,
+            "macro_recall": 0.25,
+            "macro_f1": 0.25,
+            "count": 3
+          },
+          "window_level": {
+            "accuracy": 0.45161290322580644,
+            "macro_precision": 0.43548387096774194,
+            "macro_recall": 0.4424860853432282,
+            "macro_f1": 0.4302702702702703,
+            "loss": 1.3068800895444808,
+            "window_count": 93
+          }
+        },
+        {
+          "split": 1,
+          "path": "${PRIVATE_ROOT_1}/codes/SpA-GaitFormer/runs/from_scratch_26cohort_complete25_walk_v1/outputs/binary_split_1/test_metrics.json",
+          "subject_level": {
+            "accuracy": 0.3333333333333333,
+            "macro_precision": 0.25,
+            "macro_recall": 0.25,
+            "macro_f1": 0.25,
+            "count": 3
+          },
+          "window_level": {
+            "accuracy": 0.41509433962264153,
+            "macro_precision": 0.275,
+            "macro_recall": 0.3581378299120235,
+            "macro_f1": 0.3061655405405405,
+            "loss": 0.8049063052771226,
+            "window_count": 106
+          }
+        },
+        {
+          "split": 2,
+          "path": "${PRIVATE_ROOT_1}/codes/SpA-GaitFormer/runs/from_scratch_26cohort_complete25_walk_v1/outputs/binary_split_2/test_metrics.json",
+          "subject_level": {
+            "accuracy": 0.6666666666666666,
+            "macro_precision": 0.3333333333333333,
+            "macro_recall": 0.5,
+            "macro_f1": 0.4,
+            "count": 3
+          },
+          "window_level": {
+            "accuracy": 0.7981651376146789,
+            "macro_precision": 0.788662486938349,
+            "macro_recall": 0.7166666666666667,
+            "macro_f1": 0.7356701940035273,
+            "loss": 0.462547372240539,
+            "window_count": 109
+          }
+        },
+        {
+          "split": 3,
+          "path": "${PRIVATE_ROOT_1}/codes/SpA-GaitFormer/runs/from_scratch_26cohort_complete25_walk_v1/outputs/binary_split_3/test_metrics.json",
+          "subject_level": {
+            "accuracy": 0.6666666666666666,
+            "macro_precision": 0.3333333333333333,
+            "macro_recall": 0.5,
+            "macro_f1": 0.4,
+            "count": 3
+          },
+          "window_level": {
+            "accuracy": 0.7666666666666667,
+            "macro_precision": 0.7364714603409933,
+            "macro_recall": 0.6837557603686636,
+            "macro_f1": 0.6976483762597985,
+            "loss": 0.5852006912231446,
+            "window_count": 90
+          }
+        },
+        {
+          "split": 4,
+          "path": "${PRIVATE_ROOT_1}/codes/SpA-GaitFormer/runs/from_scratch_26cohort_complete25_walk_v1/outputs/binary_split_4/test_metrics.json",
+          "subject_level": {
+            "accuracy": 0.6666666666666666,
+            "macro_precision": 0.3333333333333333,
+            "macro_recall": 0.5,
+            "macro_f1": 0.4,
+            "count": 3
+          },
+          "window_level": {
+            "accuracy": 0.6129032258064516,
+            "macro_precision": 0.5665901262916189,
+            "macro_recall": 0.557826520438684,
+            "macro_f1": 0.5571428571428572,
+            "loss": 1.2203401955225135,
+            "window_count": 93
+          }
+        }
+      ]
+    },
+    "severity": {
+      "task": "severity",
+      "repeats": 5,
+      "primary_evaluation_unit": "subject",
+      "aggregation": "mean_softmax_probability_over_all_valid_subject_windows",
+      "summary": {
+        "accuracy": {
+          "mean": 0.2,
+          "sample_std": 0.2091650066335189,
+          "values": [
+            0.5,
+            0.0,
+            0.0,
+            0.25,
+            0.25
+          ]
+        },
+        "macro_precision": {
+          "mean": 0.10416666666666667,
+          "sample_std": 0.15590239111558088,
+          "values": [
+            0.375,
+            0.0,
+            0.0,
+            0.0625,
+            0.08333333333333333
+          ]
+        },
+        "macro_recall": {
+          "mean": 0.2,
+          "sample_std": 0.2091650066335189,
+          "values": [
+            0.5,
+            0.0,
+            0.0,
+            0.25,
+            0.25
+          ]
+        },
+        "macro_f1": {
+          "mean": 0.12833333333333333,
+          "sample_std": 0.17094508539944112,
+          "values": [
+            0.41666666666666663,
+            0.0,
+            0.0,
+            0.1,
+            0.125
+          ]
+        }
+      },
+      "test_subject_occurrences": {
+        "P-389D11EB": 2,
+        "P-95AD9AA4": 1,
+        "P-DF520B2F": 2,
+        "P-0CF0533B": 2,
+        "P-5A01A807": 1,
+        "P-F337CDE2": 1,
+        "P-5733BC4C": 1,
+        "P-F4332141": 1,
+        "P-0E2B523A": 4,
+        "P-52A6D9CA": 1,
+        "P-8B2CBE6B": 1,
+        "P-17D8E113": 2,
+        "P-57C0B3CB": 1
+      },
+      "runs": [
+        {
+          "split": 0,
+          "path": "${PRIVATE_ROOT_1}/codes/SpA-GaitFormer/runs/from_scratch_26cohort_complete25_walk_v1/outputs/severity_split_0/test_metrics.json",
+          "subject_level": {
+            "accuracy": 0.5,
+            "macro_precision": 0.375,
+            "macro_recall": 0.5,
+            "macro_f1": 0.41666666666666663,
+            "count": 4
+          },
+          "window_level": {
+            "accuracy": 0.36416184971098264,
+            "macro_precision": 0.33626083388891737,
+            "macro_recall": 0.320998780912574,
+            "macro_f1": 0.3145753764943332,
+            "loss": 2.0451941958741644,
+            "window_count": 173
+          }
+        },
+        {
+          "split": 1,
+          "path": "${PRIVATE_ROOT_1}/codes/SpA-GaitFormer/runs/from_scratch_26cohort_complete25_walk_v1/outputs/severity_split_1/test_metrics.json",
+          "subject_level": {
+            "accuracy": 0.0,
+            "macro_precision": 0.0,
+            "macro_recall": 0.0,
+            "macro_f1": 0.0,
+            "count": 4
+          },
+          "window_level": {
+            "accuracy": 0.20588235294117646,
+            "macro_precision": 0.19631642512077294,
+            "macro_recall": 0.2020917301089715,
+            "macro_f1": 0.19104491298090523,
+            "loss": 3.553339520622702,
+            "window_count": 170
+          }
+        },
+        {
+          "split": 2,
+          "path": "${PRIVATE_ROOT_1}/codes/SpA-GaitFormer/runs/from_scratch_26cohort_complete25_walk_v1/outputs/severity_split_2/test_metrics.json",
+          "subject_level": {
+            "accuracy": 0.0,
+            "macro_precision": 0.0,
+            "macro_recall": 0.0,
+            "macro_f1": 0.0,
+            "count": 4
+          },
+          "window_level": {
+            "accuracy": 0.17482517482517482,
+            "macro_precision": 0.12515508684863524,
+            "macro_recall": 0.17033338534352735,
+            "macro_f1": 0.1344987761459724,
+            "loss": 2.8123928683621067,
+            "window_count": 143
+          }
+        },
+        {
+          "split": 3,
+          "path": "${PRIVATE_ROOT_1}/codes/SpA-GaitFormer/runs/from_scratch_26cohort_complete25_walk_v1/outputs/severity_split_3/test_metrics.json",
+          "subject_level": {
+            "accuracy": 0.25,
+            "macro_precision": 0.0625,
+            "macro_recall": 0.25,
+            "macro_f1": 0.1,
+            "count": 4
+          },
+          "window_level": {
+            "accuracy": 0.3888888888888889,
+            "macro_precision": 0.2793674698795181,
+            "macro_recall": 0.31497252747252746,
+            "macro_f1": 0.24453463203463205,
+            "loss": 4.421755811903211,
+            "window_count": 180
+          }
+        },
+        {
+          "split": 4,
+          "path": "${PRIVATE_ROOT_1}/codes/SpA-GaitFormer/runs/from_scratch_26cohort_complete25_walk_v1/outputs/severity_split_4/test_metrics.json",
+          "subject_level": {
+            "accuracy": 0.25,
+            "macro_precision": 0.08333333333333333,
+            "macro_recall": 0.25,
+            "macro_f1": 0.125,
+            "count": 4
+          },
+          "window_level": {
+            "accuracy": 0.281437125748503,
+            "macro_precision": 0.14743589743589744,
+            "macro_recall": 0.26118925831202044,
+            "macro_f1": 0.17551282051282052,
+            "loss": 2.047591340755988,
+            "window_count": 167
+          }
+        }
+      ]
+    }
+  }
+}

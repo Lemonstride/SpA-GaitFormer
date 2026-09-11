@@ -1,3 +1,4 @@
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -18,3 +19,9 @@ def test_formal_config_requires_unreported_values() -> None:
     with pytest.raises(ValueError, match="not recoverable"):
         validate_config(config, formal=True)
 
+
+def test_invalid_augmentation_probability_is_rejected() -> None:
+    config = deepcopy(load_config(ROOT / "configs" / "spa_mmd.yaml"))
+    config["data"]["augmentation"]["skeleton"]["feature_dropout_p"] = 1.0
+    with pytest.raises(ValueError, match="feature_dropout_p"):
+        validate_config(config)
