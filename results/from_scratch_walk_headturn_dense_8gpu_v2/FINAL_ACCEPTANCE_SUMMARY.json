@@ -1,0 +1,48 @@
+{
+  "experiment": "from_scratch_walk_headturn_dense_8gpu_v2",
+  "completed_at": "2026-09-15",
+  "status": "DONE",
+  "protocol": {
+    "window_overlap_percent": 80,
+    "frame_feature_ratio": "3:3:1",
+    "epochs_per_run": 50,
+    "repeated_subject_independent_holdouts": 5,
+    "runs": 40,
+    "pretrained_weights": false,
+    "primary_evaluation_unit": "subject"
+  },
+  "acceptance": {
+    "execution_jobs": 40,
+    "successful_exits": 40,
+    "metrics": 40,
+    "checkpoints": 40,
+    "integrity_failures": [],
+    "single_class_prediction_count": 15,
+    "accepted": true,
+    "remote_acceptance_sha256": "2514fa7294beb1c86b07782e7027f7cf0e79a0b26a8edcecb5b781d9fa43119e"
+  },
+  "results_percent": {
+    "primary20": {
+      "binary": {
+        "walk_only": {"accuracy_mean": 75.00, "accuracy_sd": 17.68, "macro_f1_mean": 58.48, "macro_f1_sd": 27.68},
+        "walk_headturn": {"accuracy_mean": 90.00, "accuracy_sd": 13.69, "macro_f1_mean": 77.14, "macro_f1_sd": 31.30}
+      },
+      "severity": {
+        "walk_only": {"accuracy_mean": 35.00, "accuracy_sd": 22.36, "macro_f1_mean": 25.33, "macro_f1_sd": 23.29},
+        "walk_headturn": {"accuracy_mean": 50.00, "accuracy_sd": 17.68, "macro_f1_mean": 37.00, "macro_f1_sd": 20.36}
+      }
+    },
+    "all25_sensitivity": {
+      "binary": {
+        "walk_only": {"accuracy_mean": 66.67, "accuracy_sd": 0.00, "macro_f1_mean": 45.33, "macro_f1_sd": 11.93},
+        "walk_headturn": {"accuracy_mean": 80.00, "accuracy_sd": 18.26, "macro_f1_mean": 64.00, "macro_f1_sd": 32.86}
+      },
+      "severity": {
+        "walk_only": {"accuracy_mean": 35.00, "accuracy_sd": 13.69, "macro_f1_mean": 22.83, "macro_f1_sd": 13.91},
+        "walk_headturn": {"accuracy_mean": 35.00, "accuracy_sd": 22.36, "macro_f1_mean": 24.50, "macro_f1_sd": 23.74}
+      }
+    }
+  },
+  "interpretation": "Execution and partition integrity accepted. Estimates remain descriptive because held-out partitions contain only three or four participants and 15 evaluations produced one predicted class."
+}
+

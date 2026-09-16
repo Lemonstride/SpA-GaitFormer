@@ -69,6 +69,50 @@ These results quantify a small-cohort, randomly initialised baseline and must
 not be compared directly with experiments that use different tasks, cohorts,
 pre-training, or evaluation units.
 
+## Preliminary Reviewed Head-Turn Experiment
+
+A preliminary paired follow-up compares walk-only training with the same model
+augmented by one reviewed head-turn angular-range token. It uses 50% window
+overlap and is retained as smoke evidence rather than a final manuscript
+result. The strict `3:3:1` walk stream is unchanged. The head-turn value is
+normalised using training participants only and enters the fusion Transformer
+as an independent clinical kinematic token.
+
+The eligible subset contains 20 participants and 806 walk windows. Across five
+repeated subject-independent holdouts, adding the token changed binary
+participant-level accuracy from 60.00% to 80.00% and macro-F1 from 42.48% to
+63.81%. Four-class accuracy changed from 30.00% to 50.00% and macro-F1 from
+22.00% to 37.83%. These are descriptive means from four-participant test sets,
+not confirmatory estimates.
+
+The full protocol, dispersion, failure modes, and interpretation boundaries are
+documented in [`docs/HEADTURN_EXPERIMENT.md`](docs/HEADTURN_EXPERIMENT.md). The
+de-identified text artifacts are under
+[`results/from_scratch_walk_headturn_primary20_v1`](results/from_scratch_walk_headturn_primary20_v1),
+with the complete archive at
+[`results/from_scratch_walk_headturn_primary20_v1.tar.gz`](results/from_scratch_walk_headturn_primary20_v1.tar.gz).
+
+## Final Dense-Window Head-Turn Experiment
+
+The final paired matrix uses 80% window overlap and contains 40 from-scratch
+runs across strict-review and all-recorded cohorts, binary and four-stratum
+tasks, walk-only and walk-plus-head-turn variants, and five repeated
+subject-independent holdouts. All runs, metrics, checkpoints, partition checks,
+and training-only head-turn normalization checks passed the integrity audit.
+
+In the strict 20-participant cohort, head-turn fusion changed mean binary
+participant-level macro-F1 from 58.48% to 77.14% and four-stratum macro-F1 from
+25.33% to 37.00%. In the 25-participant sensitivity cohort, the corresponding
+changes were 45.33% to 64.00% and 22.83% to 24.50%. Fifteen of 40 held-out
+evaluations predicted only one class across their three or four test
+participants, so these values are descriptive and do not establish clinical
+efficacy.
+
+See [`docs/DENSE_HEADTURN_EXPERIMENT.md`](docs/DENSE_HEADTURN_EXPERIMENT.md),
+[`results/from_scratch_walk_headturn_dense_8gpu_v2`](results/from_scratch_walk_headturn_dense_8gpu_v2),
+and `scripts/audit_dense_headturn_results.py` for the final protocol, concise
+results, and reproducible acceptance checks.
+
 ## Training Augmentation
 
 The verified baseline uses the deterministic `subject_cycle_rgb32_v1` policy on
@@ -170,6 +214,29 @@ The batch runners accept `SPA_GAITFORMER_ROOT`, `PYTHON_BIN`, `RUN_DIR`,
 `CONFIG_PATH`, `CUDA_DEVICE`, and `DEVICE` environment variables and do not rely
 on a particular computing platform.
 
+For the denser-window sensitivity protocol, use
+`configs/from_scratch_26_walk_dense.yaml` for the walk-only comparator and
+`configs/from_scratch_26_walk_headturn_dense.yaml` for the head-turn variant.
+Both keep a 10-map RD window but reduce RD stride from 5 to 2; the corresponding
+RGB and skeleton stride changes from 15 to 6 while preserving exact frame-level
+`3:3:1` alignment. Dense windows must still be split by participant, never by
+window.
+
+On a dedicated eight-GPU host, the complete dense matrix can be launched with:
+
+```bash
+export SPA_USER_ROOT=/path/to/writable/root
+bash scripts/start_headturn_dense_8gpu.sh
+```
+
+The matrix runs the 20-participant strictly reviewed cohort as the primary
+analysis and the 25-participant all-recorded cohort as a sensitivity analysis.
+For each cohort it runs both tasks, five subject-independent holdouts, and both
+the walk-only and walk-plus-head-turn variants, for 40 independent 50-epoch
+jobs in total. One job is assigned to each GPU at a time. Completed
+`test_metrics.json` files are validated and skipped when the same run directory
+is resumed.
+
 ## Publishing Result Artifacts
 
 `scripts/prepare_public_results.py` creates a portable text-only archive. It
@@ -197,3 +264,4 @@ confirmed distance or velocity calibration.
 `third_party/OpenGait` points to the official OpenGait source at the commit
 recorded in [THIRD_PARTY.md](THIRD_PARTY.md). OpenGait remains subject to its own
 license and upstream terms.
+
